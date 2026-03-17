@@ -13,8 +13,11 @@ export const apiCall = async ({
     // Auto-fetch token from cookies if `token` is true
     if (token) {
       const authToken = Cookies.get("token");
+      console.log("Auth Token...",authToken);
       if (authToken) {
         finalHeaders["Authorization"] = `Bearer ${authToken}`;
+      }else{
+        console.warn("No auth token found in cookies.");
       }
     }
 
@@ -28,7 +31,10 @@ export const apiCall = async ({
       headers: finalHeaders,
       body:
         body instanceof FormData ? body : body ? JSON.stringify(body) : null,
+        credentials: "include",
     });
+
+    console.log("Response...",response);
 
     const contentType = response.headers.get("content-type");
 
@@ -39,7 +45,7 @@ export const apiCall = async ({
     // Return the data for the component to handle success/failure
     return data;
   } catch (error) {
-    console.error("API Error:", error.message);
+    console.log("API Call Failed...", error)
     throw error;
   }
 };

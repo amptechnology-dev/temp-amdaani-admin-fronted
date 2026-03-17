@@ -38,7 +38,7 @@ export function LoginForm({ className, ...props }) {
 
     try {
       //NOTE: Hardcoded mobile number for super admin.
-      const mobileNo = "8697972001";
+      const mobileNo = "9903419235";
       if (phone !== mobileNo) {
         setLoading(false);
         setError("Invalid mobile number.");

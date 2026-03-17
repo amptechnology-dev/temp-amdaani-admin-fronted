@@ -78,22 +78,12 @@ const Ads = () => {
         method: "GET",
         token: true,
       });
-
-      if (response.success) {
-        setAds(response.data);
-      } else if (response === "Unauthorized") {
-        Cookies.remove("token");
-        toast.error("Session expired", { description: "Please log in again." });
-        router.push("/login");
-      } else {
-        toast.error("Failed to fetch ads", {
-          description: response.message || "Unknown error occurred.",
-        });
-      }
+      console.log("Response Ads....", response);
     } catch (error) {
-      toast.error("Network Error", {
-        description: error.message || "Could not fetch ads.",
-      });
+      console.log("Error fetching ads:", error);
+      // toast.error("Network Error", {
+      //   description: error.message || "Could not fetch ads.",
+      // });
     } finally {
       setLoading(false);
     }
