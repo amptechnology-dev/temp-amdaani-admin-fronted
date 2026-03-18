@@ -37,13 +37,6 @@ export function LoginForm({ className, ...props }) {
     setError("");
 
     try {
-      //NOTE: Hardcoded mobile number for super admin.
-      const mobileNo = "9903419235";
-      if (phone !== mobileNo) {
-        setLoading(false);
-        setError("Invalid mobile number.");
-        return;
-      }
       // Call the send OTP API
       const response = await apiCall({
         endpoint: URL.getOtp,
@@ -52,7 +45,6 @@ export function LoginForm({ className, ...props }) {
           phone: phone,
         },
       });
-
       if (response.success) {
         toast.success(response.message || "OTP sent successfully!");
         console.log(response.data);
@@ -74,7 +66,6 @@ export function LoginForm({ className, ...props }) {
     setError("");
 
     try {
-      // Call the verify OTP API
       const response = await apiCall({
         endpoint: URL.verifyOtp,
         method: "POST",

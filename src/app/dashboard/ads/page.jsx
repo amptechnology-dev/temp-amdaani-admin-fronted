@@ -39,8 +39,6 @@ import {
 import { apiCall } from "../../../../utils/api";
 import URL from "../../../../utils/url";
 import { toast } from "sonner";
-import Cookies from "js-cookie";
-import { useRouter } from "next/navigation";
 
 const Ads = () => {
   const [ads, setAds] = React.useState([]);
@@ -60,8 +58,6 @@ const Ads = () => {
   const [endDate, setEndDate] = React.useState(undefined);
   const [isActive, setIsActive] = React.useState(true);
 
-  const router = useRouter();
-
   const formatLocalDate = (date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -78,12 +74,19 @@ const Ads = () => {
         method: "GET",
         token: true,
       });
-      console.log("Response Ads....", response);
+
+      if (response?.success && Array.isArray(response.data)) {
+        setAds(response.data);
+      } else {
+        setAds([]);
+        toast.error(response?.message || "Failed to fetch ads.");
+      }
     } catch (error) {
       console.log("Error fetching ads:", error);
-      // toast.error("Network Error", {
-      //   description: error.message || "Could not fetch ads.",
-      // });
+      setAds([]);
+      toast.error("Network Error", {
+        description: error.message || "Could not fetch ads.",
+      });
     } finally {
       setLoading(false);
     }
@@ -494,43 +497,63 @@ const Ads = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {ads.map((ad) => (
-                <TableRow key={ad._id}>
-                  <TableCell>
-                    <img
-                      src={ad.imageUrl}
-                      alt={ad.title}
-                      className="h-12 w-12 rounded object-cover"
-                    />
-                  </TableCell>
-                  <TableCell>{ad.title}</TableCell>
-                  <TableCell>{ad.redirectUrl}</TableCell>
-                  <TableCell>{ad.position}</TableCell>
-                  <TableCell>{formatDate(ad.startDate)}</TableCell>
-                  <TableCell>{formatDate(ad.endDate)}</TableCell>
-                  <TableCell>
-                    <span
-                      className={cn(
-                        "px-2 py-1 rounded-full text-xs font-medium",
-                        ad.isActive
-                          ? "bg-green-100 text-green-800"
-                          : "bg-red-100 text-red-800"
-                      )}
-                    >
-                      {ad.isActive ? "Active" : "Inactive"}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => handleEditClick(ad._id)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
+              {loading ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={8}
+                    className="text-center py-8 text-muted-foreground"
+                  >
+                    Loading ads...
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : ads.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={8}
+                    className="text-center py-8 text-muted-foreground"
+                  >
+                    No ads found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                ads.map((ad) => (
+                  <TableRow key={ad._id}>
+                    <TableCell>
+                      <img
+                        src={ad.imageUrl}
+                        alt={ad.title}
+                        className="h-12 w-12 rounded object-cover"
+                      />
+                    </TableCell>
+                    <TableCell>{ad.title}</TableCell>
+                    <TableCell>{ad.redirectUrl}</TableCell>
+                    <TableCell>{ad.position}</TableCell>
+                    <TableCell>{formatDate(ad.startDate)}</TableCell>
+                    <TableCell>{formatDate(ad.endDate)}</TableCell>
+                    <TableCell>
+                      <span
+                        className={cn(
+                          "px-2 py-1 rounded-full text-xs font-medium",
+                          ad.isActive
+                            ? "bg-green-100 text-green-800"
+                            : "bg-red-100 text-red-800"
+                        )}
+                      >
+                        {ad.isActive ? "Active" : "Inactive"}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => handleEditClick(ad._id)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>
