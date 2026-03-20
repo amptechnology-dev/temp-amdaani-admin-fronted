@@ -1,4 +1,4 @@
-const baseUrl = "http://localhost:8001/api";
+const baseUrl = process.env.NEXT_PUBLIC_API_URL;
 
 const URL = {
   ads: `${baseUrl}/ads`,
