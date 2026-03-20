@@ -1,6 +1,6 @@
 import Cookies from "js-cookie";
 
-export const apiCall = async ({
+export const apiCall = async ({ 
   endpoint,
   method = "GET",
   headers = {},
