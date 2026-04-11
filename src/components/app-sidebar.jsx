@@ -75,6 +75,14 @@ const data = {
           url: "/dashboard/stores",
         },
         {
+          title: "Feedbacks",
+          url: "/dashboard/feedbacks",
+        },
+        {
+          title: "Faqs",
+          url: "/dashboard/faqs",
+        },
+        {
           title: "Videos",
           url: "/dashboard/videos",
         },

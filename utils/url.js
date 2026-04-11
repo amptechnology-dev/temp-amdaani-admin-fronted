@@ -7,6 +7,8 @@ const URL = {
   register: `${baseUrl}/auth/register-superadmin`,
   verifyOtp: `${baseUrl}/auth/verify-otp-superadmin`,
   store: `${baseUrl}/store/all`,
+  feedback: `${baseUrl}/feedback`,
+  faq: `${baseUrl}/faq`,
   videos: `${baseUrl}/how-to-videos`,
 };
 export default URL;
