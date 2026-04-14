@@ -86,6 +86,10 @@ const data = {
           title: "Videos",
           url: "/dashboard/videos",
         },
+        {
+          title: "Apk Version",
+          url: "/dashboard/apk",
+        }
         // {
         //   title: "Settings",
         //   url: "#",
