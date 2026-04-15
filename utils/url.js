@@ -11,6 +11,8 @@ const URL = {
   store: `${baseUrl}/store/all`,
   feedback: `${baseUrl}/feedback`,
   faq: `${baseUrl}/faq`,
+  helpline: `${baseUrl}/helpline`,
+  allHelpline: `${baseUrl}/helpline/all-helpline`,
   videos: `${baseUrl}/how-to-videos`,
 };
 export default URL;

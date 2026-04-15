@@ -89,6 +89,10 @@ const data = {
         {
           title: "Apk Version",
           url: "/dashboard/apk",
+        },
+        {
+          title: "Support",
+          url: "/dashboard/supports",
         }
         // {
         //   title: "Settings",
