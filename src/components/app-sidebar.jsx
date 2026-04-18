@@ -58,10 +58,10 @@ const data = {
       icon: LayoutDashboard,
       isActive: true,
       items: [
-        // {
-        //   title: "Home",
-        //   url: "/dashboard",
-        // },
+        {
+          title: "Hero",
+          url: "/dashboard/hero",
+        },
         {
           title: "Plans",
           url: "/dashboard/plans",
