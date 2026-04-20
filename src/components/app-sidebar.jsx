@@ -59,8 +59,12 @@ const data = {
       isActive: true,
       items: [
         {
-          title: "Hero",
+          title: "Banner(Web)",
           url: "/dashboard/hero",
+        },
+        {
+          title: "About(Web)",
+          url: "/dashboard/about",
         },
         {
           title: "Plans",
@@ -87,7 +91,7 @@ const data = {
           url: "/dashboard/videos",
         },
         {
-          title: "Apk Version",
+          title: "Apk Version(Web)",
           url: "/dashboard/apk",
         },
         {

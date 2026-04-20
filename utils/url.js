@@ -15,5 +15,6 @@ const URL = {
   allHelpline: `${baseUrl}/helpline/all-helpline`,
   videos: `${baseUrl}/how-to-videos`,
   hero: `${baseUrl}/hero`,
+  about: `${baseUrl}/about`,
 };
 export default URL;

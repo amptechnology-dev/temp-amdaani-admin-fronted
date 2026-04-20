@@ -19,8 +19,27 @@ import {
 	Table as TableIcon,
 	Pencil,
 	Trash2,
+	Zap,
+	Shield,
+	Rocket,
+	Star,
+	Sparkles,
+	CheckCircle2,
+	Clock3,
+	Users,
+	Lock,
+	Heart,
+	Bell,
+	Globe,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import {
 	Table,
 	TableBody,
@@ -32,6 +51,21 @@ import {
 import { apiCall } from "../../../../utils/api";
 import URL from "../../../../utils/url";
 import { toast } from "sonner";
+
+const FEATURE_ICON_OPTIONS = [
+	{ value: "Zap", label: "Zap", Icon: Zap },
+	{ value: "Shield", label: "Shield", Icon: Shield },
+	{ value: "Rocket", label: "Rocket", Icon: Rocket },
+	{ value: "Star", label: "Star", Icon: Star },
+	{ value: "Sparkles", label: "Sparkles", Icon: Sparkles },
+	{ value: "CheckCircle2", label: "Check Circle", Icon: CheckCircle2 },
+	{ value: "Clock3", label: "Clock", Icon: Clock3 },
+	{ value: "Users", label: "Users", Icon: Users },
+	{ value: "Lock", label: "Lock", Icon: Lock },
+	{ value: "Heart", label: "Heart", Icon: Heart },
+	{ value: "Bell", label: "Bell", Icon: Bell },
+	{ value: "Globe", label: "Globe", Icon: Globe },
+];
 
 const Hero = () => {
 	const [heroes, setHeroes] = React.useState([]);
@@ -410,14 +444,30 @@ const Hero = () => {
 								<Label htmlFor={`feature-icon-${index}`}>
 									Feature {index + 1} Icon *
 								</Label>
-								<Input
-									id={`feature-icon-${index}`}
+								<Select
 									value={feature.icon}
-									onChange={(e) =>
-										handleFeatureChange(index, "icon", e.target.value)
-									}
-									placeholder="Zap"
-								/>
+									onValueChange={(value) => handleFeatureChange(index, "icon", value)}
+								>
+									<SelectTrigger id={`feature-icon-${index}`}>
+										<SelectValue placeholder="Select icon" />
+									</SelectTrigger>
+									<SelectContent>
+										{feature.icon && !FEATURE_ICON_OPTIONS.some((option) => option.value === feature.icon) && (
+											<SelectItem value={feature.icon}>{feature.icon}</SelectItem>
+										)}
+										{FEATURE_ICON_OPTIONS.map((option) => {
+											const Icon = option.Icon;
+											return (
+												<SelectItem key={option.value} value={option.value}>
+													<div className="flex items-center gap-2">
+														<Icon className="w-4 h-4" />
+														<span>{option.label}</span>
+													</div>
+												</SelectItem>
+											);
+										})}
+									</SelectContent>
+								</Select>
 							</div>
 							<div className="space-y-2">
 								<Label htmlFor={`feature-text-${index}`}>
