@@ -67,6 +67,39 @@ const FEATURE_ICON_OPTIONS = [
 	{ value: "Globe", label: "Globe", Icon: Globe },
 ];
 
+const GRADIENT_COLOR_OPTIONS = [
+	{ value: "blue-600", label: "Blue 600", hex: "#2563eb" },
+	{ value: "purple-600", label: "Purple 600", hex: "#9333ea" },
+	{ value: "pink-600", label: "Pink 600", hex: "#db2777" },
+	{ value: "red-600", label: "Red 600", hex: "#dc2626" },
+	{ value: "orange-600", label: "Orange 600", hex: "#ea580c" },
+	{ value: "amber-600", label: "Amber 600", hex: "#d97706" },
+	{ value: "yellow-600", label: "Yellow 600", hex: "#ca8a04" },
+	{ value: "green-600", label: "Green 600", hex: "#16a34a" },
+	{ value: "emerald-600", label: "Emerald 600", hex: "#059669" },
+	{ value: "teal-600", label: "Teal 600", hex: "#0d9488" },
+	{ value: "cyan-600", label: "Cyan 600", hex: "#0891b2" },
+	{ value: "indigo-600", label: "Indigo 600", hex: "#4f46e5" },
+	{ value: "rose-600", label: "Rose 600", hex: "#e11d48" },
+];
+
+const buildGradientClassString = (from, via, to) =>
+	`from-${from} via-${via} to-${to}`;
+
+const parseGradientClassString = (value = "") => {
+	const fromMatch = value.match(/from-([a-z]+-\d{3})/i);
+	const viaMatch = value.match(/via-([a-z]+-\d{3})/i);
+	const toMatch = value.match(/to-([a-z]+-\d{3})/i);
+
+	if (!fromMatch || !viaMatch || !toMatch) return null;
+
+	return {
+		from: fromMatch[1],
+		via: viaMatch[1],
+		to: toMatch[1],
+	};
+};
+
 const Hero = () => {
 	const [heroes, setHeroes] = React.useState([]);
 	const [loading, setLoading] = React.useState(false);
@@ -80,10 +113,12 @@ const Hero = () => {
 	const [title, setTitle] = React.useState("");
 	const [subtitle, setSubtitle] = React.useState("");
 	const [description, setDescription] = React.useState("");
-	const [gradient, setGradient] = React.useState("");
-	const [color1, setColor1] = React.useState("#3b82f6");
-	const [color2, setColor2] = React.useState("#8b5cf6");
-	const [color3, setColor3] = React.useState("#ec4899");
+	const [gradient, setGradient] = React.useState(
+		buildGradientClassString("blue-600", "purple-600", "pink-600")
+	);
+	const [gradientFrom, setGradientFrom] = React.useState("blue-600");
+	const [gradientVia, setGradientVia] = React.useState("purple-600");
+	const [gradientTo, setGradientTo] = React.useState("pink-600");
 	const [phoneImage, setPhoneImage] = React.useState(null);
 	const [phoneImagePreview, setPhoneImagePreview] = React.useState(null);
 	const [features, setFeatures] = React.useState([
@@ -130,7 +165,10 @@ const Hero = () => {
 		setTitle("");
 		setSubtitle("");
 		setDescription("");
-		setGradient("");
+		setGradient(buildGradientClassString("blue-600", "purple-600", "pink-600"));
+		setGradientFrom("blue-600");
+		setGradientVia("purple-600");
+		setGradientTo("pink-600");
 		setPhoneImage(null);
 		setFeatures([
 			{ icon: "", text: "" },
@@ -168,12 +206,10 @@ const Hero = () => {
 		};
 	}, [phoneImage]);
 
-	// when color pickers change, update gradient as a CSS linear-gradient string
+	// when gradient color selectors change, update gradient as tailwind class string
 	React.useEffect(() => {
-		if (color1 || color2 || color3) {
-			setGradient(`linear-gradient(90deg, ${color1}, ${color2}, ${color3})`);
-		}
-	}, [color1, color2, color3]);
+		setGradient(buildGradientClassString(gradientFrom, gradientVia, gradientTo));
+	}, [gradientFrom, gradientVia, gradientTo]);
 
 	// -------------------- Get Single Hero (for Edit) --------------------
 	const handleEditClick = async (id) => {
@@ -190,7 +226,18 @@ const Hero = () => {
 				setTitle(item.title || "");
 				setSubtitle(item.subtitle || "");
 				setDescription(item.description || "");
-				setGradient(item.gradient || "");
+				const parsedGradient = parseGradientClassString(item.gradient || "");
+				if (parsedGradient) {
+					setGradientFrom(parsedGradient.from);
+					setGradientVia(parsedGradient.via);
+					setGradientTo(parsedGradient.to);
+					setGradient(item.gradient);
+				} else {
+					setGradientFrom("blue-600");
+					setGradientVia("purple-600");
+					setGradientTo("pink-600");
+					setGradient(buildGradientClassString("blue-600", "purple-600", "pink-600"));
+				}
 				setPriority(item.priority ?? 1);
 				setIsActive(item.isActive ?? true);
 				setPhoneImage(item.phoneImage || null);
@@ -356,10 +403,30 @@ const Hero = () => {
 		}
 	};
 
+	const handleGradientInputChange = (value) => {
+		setGradient(value);
+		const parsed = parseGradientClassString(value);
+		if (parsed) {
+			setGradientFrom(parsed.from);
+			setGradientVia(parsed.via);
+			setGradientTo(parsed.to);
+		}
+	};
+
+	const gradientPreviewFromHex =
+		GRADIENT_COLOR_OPTIONS.find((item) => item.value === gradientFrom)?.hex ||
+		"#2563eb";
+	const gradientPreviewViaHex =
+		GRADIENT_COLOR_OPTIONS.find((item) => item.value === gradientVia)?.hex ||
+		"#9333ea";
+	const gradientPreviewToHex =
+		GRADIENT_COLOR_OPTIONS.find((item) => item.value === gradientTo)?.hex ||
+		"#db2777";
+
 	// -------------------- Form Dialog --------------------
 	const HeroFormDialog = () => (
 		<Dialog open={open} onOpenChange={setOpen}>
-			<DialogContent className="max-w-lg max-h-[80vh] overflow-auto">
+			<DialogContent className="w-[95vw] max-w-5xl max-h-[90vh] overflow-y-auto">
 				<DialogHeader>
 					<DialogTitle>{editMode ? "Edit Hero" : "Create New Hero"}</DialogTitle>
 					<DialogDescription>
@@ -369,8 +436,9 @@ const Hero = () => {
 					</DialogDescription>
 				</DialogHeader>
 
-				<div className="space-y-4">
-					<div className="space-y-2">
+				<div className="space-y-6">
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<div className="space-y-2">
 						<Label htmlFor="title">Title *</Label>
 						<Input
 							id="title"
@@ -380,7 +448,7 @@ const Hero = () => {
 						/>
 					</div>
 
-					<div className="space-y-2">
+						<div className="space-y-2">
 						<Label htmlFor="subtitle">Subtitle</Label>
 						<Input
 							id="subtitle"
@@ -388,9 +456,10 @@ const Hero = () => {
 							onChange={(e) => setSubtitle(e.target.value)}
 							placeholder="Enter subtitle"
 						/>
+						</div>
 					</div>
 
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+					<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 						<div className="space-y-2">
 							<Label htmlFor="description">Description *</Label>
 							<textarea
@@ -407,39 +476,85 @@ const Hero = () => {
 							<Input
 								id="gradient"
 								value={gradient}
-								onChange={(e) => setGradient(e.target.value)}
+								onChange={(e) => handleGradientInputChange(e.target.value)}
 								placeholder="from-blue-600 via-purple-600 to-pink-600"
 							/>
 
 								<div className="mt-2">
 									<div
 										className={cn("h-12 rounded-md border overflow-hidden", !gradient && "bg-gray-100")}
-										style={gradient && gradient.startsWith("linear-gradient") ? { background: gradient } : undefined}
+										style={{ background: `linear-gradient(90deg, ${gradientPreviewFromHex}, ${gradientPreviewViaHex}, ${gradientPreviewToHex})` }}
 									>
 										{!gradient && <div className="h-full w-full" />}
 									</div>
-									<p className="text-xs text-muted-foreground mt-1">Preview: {gradient ? (gradient.startsWith("linear-gradient") ? "Custom gradient" : gradient) : "—"}</p>
+									<p className="text-xs text-muted-foreground mt-1">Preview: {gradient || "—"}</p>
 
-									<div className="flex gap-2 items-center mt-3">
-										<div className="flex items-center gap-2">
-											<Label className="text-xs">Color 1</Label>
-											<input type="color" value={color1} onChange={(e) => setColor1(e.target.value)} className="w-8 h-8 p-0 border rounded" />
+									<div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+										<div className="space-y-2 rounded-md border p-3">
+											<Label className="text-xs font-medium">From</Label>
+											<Select value={gradientFrom} onValueChange={setGradientFrom}>
+												<SelectTrigger className="w-full">
+													<SelectValue placeholder="Select color" />
+												</SelectTrigger>
+												<SelectContent>
+													{GRADIENT_COLOR_OPTIONS.map((option) => (
+														<SelectItem key={option.value} value={option.value}>
+															<div className="flex min-w-0 items-center gap-2">
+																<span className="h-3 w-3 shrink-0 rounded-full border" style={{ backgroundColor: option.hex }} />
+																<span className="truncate">{option.label}</span>
+															</div>
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
 										</div>
-										<div className="flex items-center gap-2">
-											<Label className="text-xs">Color 2</Label>
-											<input type="color" value={color2} onChange={(e) => setColor2(e.target.value)} className="w-8 h-8 p-0 border rounded" />
+
+										<div className="space-y-2 rounded-md border p-3">
+											<Label className="text-xs font-medium">Via</Label>
+											<Select value={gradientVia} onValueChange={setGradientVia}>
+												<SelectTrigger className="w-full">
+													<SelectValue placeholder="Select color" />
+												</SelectTrigger>
+												<SelectContent>
+													{GRADIENT_COLOR_OPTIONS.map((option) => (
+														<SelectItem key={option.value} value={option.value}>
+															<div className="flex min-w-0 items-center gap-2">
+																<span className="h-3 w-3 shrink-0 rounded-full border" style={{ backgroundColor: option.hex }} />
+																<span className="truncate">{option.label}</span>
+															</div>
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
 										</div>
-										<div className="flex items-center gap-2">
-											<Label className="text-xs">Color 3</Label>
-											<input type="color" value={color3} onChange={(e) => setColor3(e.target.value)} className="w-8 h-8 p-0 border rounded" />
+
+										<div className="space-y-2 rounded-md border p-3 sm:col-span-2">
+											<Label className="text-xs font-medium">To</Label>
+											<Select value={gradientTo} onValueChange={setGradientTo}>
+												<SelectTrigger className="w-full">
+													<SelectValue placeholder="Select color" />
+												</SelectTrigger>
+												<SelectContent>
+													{GRADIENT_COLOR_OPTIONS.map((option) => (
+														<SelectItem key={option.value} value={option.value}>
+															<div className="flex min-w-0 items-center gap-2">
+																<span className="h-3 w-3 shrink-0 rounded-full border" style={{ backgroundColor: option.hex }} />
+																<span className="truncate">{option.label}</span>
+															</div>
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
 										</div>
 									</div>
 								</div>
 						</div>
 					</div>
 
-					{features.map((feature, index) => (
-						<div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-2">
+					<div className="space-y-3">
+						<h4 className="text-sm font-medium">Hero Features</h4>
+						{features.map((feature, index) => (
+						<div key={index} className="grid grid-cols-1 lg:grid-cols-2 gap-3">
 							<div className="space-y-2">
 								<Label htmlFor={`feature-icon-${index}`}>
 									Feature {index + 1} Icon *
@@ -484,6 +599,7 @@ const Hero = () => {
 							</div>
 						</div>
 					))}
+					</div>
 
 					<div className="space-y-2">
 						<Label htmlFor="phoneImage">
@@ -507,6 +623,7 @@ const Hero = () => {
 						)}
 					</div>
 
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 					<div className="space-y-2">
 						<Label htmlFor="priority">Priority</Label>
 						<Input
@@ -529,6 +646,7 @@ const Hero = () => {
 							<Label htmlFor="active">Active</Label>
 						</div>
 					)}
+					</div>
 
 					<Button
 						className="w-full"

@@ -76,25 +76,50 @@ const DEFAULT_STATS = [
 const DEFAULT_MISSION_POINTS = [""];
 
 const DEFAULT_VALUES = [
-	{ icon: "", title: "", description: "", color: "" },
+	{ icon: "", title: "", description: "", color: "from-blue-600 via-purple-600 to-pink-600" },
 ];
 
-const createDefaultValueColorPicker = () => ({
-	color1: "#3b82f6",
-	color2: "#8b5cf6",
-	color3: "#ec4899",
-});
+const GRADIENT_COLOR_OPTIONS = [
+	{ value: "blue-600", label: "Blue 600", hex: "#2563eb" },
+	{ value: "purple-600", label: "Purple 600", hex: "#9333ea" },
+	{ value: "pink-600", label: "Pink 600", hex: "#db2777" },
+	{ value: "red-600", label: "Red 600", hex: "#dc2626" },
+	{ value: "orange-600", label: "Orange 600", hex: "#ea580c" },
+	{ value: "amber-600", label: "Amber 600", hex: "#d97706" },
+	{ value: "yellow-600", label: "Yellow 600", hex: "#ca8a04" },
+	{ value: "green-600", label: "Green 600", hex: "#16a34a" },
+	{ value: "emerald-600", label: "Emerald 600", hex: "#059669" },
+	{ value: "teal-600", label: "Teal 600", hex: "#0d9488" },
+	{ value: "cyan-600", label: "Cyan 600", hex: "#0891b2" },
+	{ value: "indigo-600", label: "Indigo 600", hex: "#4f46e5" },
+	{ value: "rose-600", label: "Rose 600", hex: "#e11d48" },
+];
 
-const extractHexColorsFromGradient = (gradient) => {
-	if (!gradient || !gradient.startsWith("linear-gradient")) return null;
-	const matches = gradient.match(/#[0-9a-fA-F]{6}/g);
-	if (!matches || matches.length < 3) return null;
+const buildGradientClassString = (from, via, to) =>
+	`from-${from} via-${via} to-${to}`;
+
+const parseGradientClassString = (value = "") => {
+	const fromMatch = value.match(/from-([a-z]+-\d{3})/i);
+	const viaMatch = value.match(/via-([a-z]+-\d{3})/i);
+	const toMatch = value.match(/to-([a-z]+-\d{3})/i);
+
+	if (!fromMatch || !viaMatch || !toMatch) return null;
+
 	return {
-		color1: matches[0],
-		color2: matches[1],
-		color3: matches[2],
+		color1: fromMatch[1],
+		color2: viaMatch[1],
+		color3: toMatch[1],
 	};
 };
+
+const createDefaultValueColorPicker = () => ({
+	color1: "blue-600",
+	color2: "purple-600",
+	color3: "pink-600",
+});
+
+const getGradientColorHex = (colorValue) =>
+	GRADIENT_COLOR_OPTIONS.find((option) => option.value === colorValue)?.hex || "#9ca3af";
 
 const AboutPage = () => {
 	const [abouts, setAbouts] = React.useState([]);
@@ -206,7 +231,7 @@ const AboutPage = () => {
 	const addValue = () => {
 		setValues((prev) => [
 			...prev,
-			{ icon: "", title: "", description: "", color: "" },
+			{ icon: "", title: "", description: "", color: "from-blue-600 via-purple-600 to-pink-600" },
 		]);
 		setValueColorPickers((prev) => [...prev, createDefaultValueColorPicker()]);
 	};
@@ -226,7 +251,7 @@ const AboutPage = () => {
 			handleValueChange(
 				index,
 				"color",
-				`linear-gradient(90deg, ${color1}, ${color2}, ${color3})`
+				buildGradientClassString(color1, color2, color3)
 			);
 
 			return next;
@@ -271,12 +296,12 @@ const AboutPage = () => {
 
 			setValueColorPickers(
 				itemValues.map((value) => {
-					const parsed = extractHexColorsFromGradient(value?.color || "");
+					const parsed = parseGradientClassString(value?.color || "");
 					return parsed || createDefaultValueColorPicker();
 				})
 			);
 		} else {
-			setValues([{ icon: "", title: "", description: "", color: "" }]);
+			setValues([{ icon: "", title: "", description: "", color: "from-blue-600 via-purple-600 to-pink-600" }]);
 			setValueColorPickers([createDefaultValueColorPicker()]);
 		}
 	};
@@ -412,7 +437,7 @@ const AboutPage = () => {
 
 	const AboutFormDialog = () => (
 		<Dialog open={open} onOpenChange={setOpen}>
-			<DialogContent className="w-[96vw] max-w-7xl max-h-[85vh] overflow-auto">
+			<DialogContent className="w-[98vw] max-w-[88rem] max-h-[92vh] overflow-y-auto">
 				<DialogHeader>
 					<DialogTitle>
 						{editMode ? "Update About Section" : "Create About Section"}
@@ -600,8 +625,8 @@ const AboutPage = () => {
 						</div>
 						{values.map((item, index) => (
 							<div key={index} className="space-y-3 border rounded-md p-3">
-								<div className="grid grid-cols-1 xl:grid-cols-12 gap-3 items-start">
-								<div className="xl:col-span-2 min-w-0">
+								<div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start">
+								<div className="lg:col-span-2 min-w-0">
 									<Select
 										value={item.icon}
 										onValueChange={(value) => handleValueChange(index, "icon", value)}
@@ -628,25 +653,25 @@ const AboutPage = () => {
 									</Select>
 								</div>
 								<Input
-									className="xl:col-span-2 min-w-0"
+									className="lg:col-span-3 min-w-0"
 									value={item.title}
 									onChange={(e) => handleValueChange(index, "title", e.target.value)}
 									placeholder="Value title"
 								/>
 								<Input
-									className="xl:col-span-3 min-w-0"
+									className="lg:col-span-5 min-w-0"
 									value={item.description}
 									onChange={(e) => handleValueChange(index, "description", e.target.value)}
 									placeholder="Value description"
 								/>
 								<Input
-									className="xl:col-span-3 min-w-0"
+									className="lg:col-span-10 min-w-0"
 									value={item.color}
-									onChange={(e) => handleValueChange(index, "color", e.target.value)}
-									placeholder="linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899)"
+									readOnly
+									placeholder="from-blue-600 via-purple-600 to-pink-600"
 								/>
 								<Button
-									className="xl:col-span-2 w-full"
+									className="lg:col-span-2 w-full"
 									type="button"
 									size="icon"
 									variant="destructive"
@@ -656,55 +681,109 @@ const AboutPage = () => {
 								</Button>
 								</div>
 
-								<div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
-									<div className="lg:col-span-3 flex items-center gap-2">
-										<Label className="text-xs">Color 1</Label>
-										<input
-											type="color"
-											value={valueColorPickers[index]?.color1 || "#3b82f6"}
-											onChange={(e) =>
-												handleValueColorPickerChange(index, "color1", e.target.value)
-											}
-											className="w-8 h-8 p-0 border rounded"
-										/>
-									</div>
-									<div className="lg:col-span-3 flex items-center gap-2">
-										<Label className="text-xs">Color 2</Label>
-										<input
-											type="color"
-											value={valueColorPickers[index]?.color2 || "#8b5cf6"}
-											onChange={(e) =>
-												handleValueColorPickerChange(index, "color2", e.target.value)
-											}
-											className="w-8 h-8 p-0 border rounded"
-										/>
-									</div>
-									<div className="lg:col-span-3 flex items-center gap-2">
-										<Label className="text-xs">Color 3</Label>
-										<input
-											type="color"
-											value={valueColorPickers[index]?.color3 || "#ec4899"}
-											onChange={(e) =>
-												handleValueColorPickerChange(index, "color3", e.target.value)
-											}
-											className="w-8 h-8 p-0 border rounded"
-										/>
-									</div>
-									<div className="lg:col-span-3">
-										<div
-											className={cn(
-												"h-8 rounded-md border overflow-hidden",
-												!item.color && "bg-gray-100"
-											)}
-											style={
-												item.color && item.color.startsWith("linear-gradient")
-													? { background: item.color }
-													: undefined
+								<div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+									<div className="space-y-2 rounded-md border p-3">
+										<Label className="text-xs">From</Label>
+										<div className="flex items-center gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-xs">
+											<span
+												className="h-3.5 w-3.5 rounded-full border"
+												style={{
+													backgroundColor: getGradientColorHex(valueColorPickers[index]?.color1 || "blue-600"),
+												}}
+											/>
+											<span>{valueColorPickers[index]?.color1 || "blue-600"}</span>
+										</div>
+										<Select
+											value={valueColorPickers[index]?.color1 || "blue-600"}
+											onValueChange={(value) =>
+												handleValueColorPickerChange(index, "color1", value)
 											}
 										>
-											{!item.color && <div className="h-full w-full" />}
-										</div>
+											<SelectTrigger className="w-full">
+												<SelectValue placeholder="Select color" />
+											</SelectTrigger>
+											<SelectContent>
+												{GRADIENT_COLOR_OPTIONS.map((option) => (
+													<SelectItem key={option.value} value={option.value}>
+														{option.label}
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
 									</div>
+									<div className="space-y-2 rounded-md border p-3">
+										<Label className="text-xs">Via</Label>
+										<div className="flex items-center gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-xs">
+											<span
+												className="h-3.5 w-3.5 rounded-full border"
+												style={{
+													backgroundColor: getGradientColorHex(valueColorPickers[index]?.color2 || "purple-600"),
+												}}
+											/>
+											<span>{valueColorPickers[index]?.color2 || "purple-600"}</span>
+										</div>
+										<Select
+											value={valueColorPickers[index]?.color2 || "purple-600"}
+											onValueChange={(value) =>
+												handleValueColorPickerChange(index, "color2", value)
+											}
+										>
+											<SelectTrigger className="w-full">
+												<SelectValue placeholder="Select color" />
+											</SelectTrigger>
+											<SelectContent>
+												{GRADIENT_COLOR_OPTIONS.map((option) => (
+													<SelectItem key={option.value} value={option.value}>
+														{option.label}
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
+									</div>
+									<div className="space-y-2 rounded-md border p-3">
+										<Label className="text-xs">To</Label>
+										<div className="flex items-center gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-xs">
+											<span
+												className="h-3.5 w-3.5 rounded-full border"
+												style={{
+													backgroundColor: getGradientColorHex(valueColorPickers[index]?.color3 || "pink-600"),
+												}}
+											/>
+											<span>{valueColorPickers[index]?.color3 || "pink-600"}</span>
+										</div>
+										<Select
+											value={valueColorPickers[index]?.color3 || "pink-600"}
+											onValueChange={(value) =>
+												handleValueColorPickerChange(index, "color3", value)
+											}
+										>
+											<SelectTrigger className="w-full">
+												<SelectValue placeholder="Select color" />
+											</SelectTrigger>
+											<SelectContent>
+												{GRADIENT_COLOR_OPTIONS.map((option) => (
+													<SelectItem key={option.value} value={option.value}>
+														{option.label}
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
+									</div>
+								</div>
+
+								<div
+									className={cn("h-10 rounded-md border overflow-hidden", !item.color && "bg-gray-100")}
+									style={{
+										background: `linear-gradient(90deg, ${getGradientColorHex(
+											valueColorPickers[index]?.color1 || "blue-600"
+										)}, ${getGradientColorHex(
+											valueColorPickers[index]?.color2 || "purple-600"
+										)}, ${getGradientColorHex(
+											valueColorPickers[index]?.color3 || "pink-600"
+										)})`,
+									}}
+								>
+									{!item.color && <div className="h-full w-full" />}
 								</div>
 							</div>
 						))}

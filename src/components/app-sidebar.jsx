@@ -91,6 +91,10 @@ const data = {
           url: "/dashboard/videos",
         },
         {
+          title: "Testimonials",
+          url: "/dashboard/testimonials",
+        },
+        {
           title: "Apk Version(Web)",
           url: "/dashboard/apk",
         },

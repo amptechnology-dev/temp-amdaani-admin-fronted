@@ -16,5 +16,6 @@ const URL = {
   videos: `${baseUrl}/how-to-videos`,
   hero: `${baseUrl}/hero`,
   about: `${baseUrl}/about`,
+  testimonial: `${baseUrl}/testimonial`,
 };
 export default URL;

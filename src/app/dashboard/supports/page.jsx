@@ -38,6 +38,11 @@ import {
 	Phone,
 	Mail,
 	Star,
+	MapPin,
+	Facebook,
+	Instagram,
+	Youtube,
+	Linkedin,
 } from "lucide-react";
 
 export default function SupportPage() {
@@ -52,7 +57,12 @@ export default function SupportPage() {
 	const [selectedSupportId, setSelectedSupportId] = useState(null);
 	const [phone, setPhone] = useState("");
 	const [email, setEmail] = useState("");
+	const [location, setLocation] = useState("");
 	const [isPrimary, setIsPrimary] = useState(false);
+	const [facebook, setFacebook] = useState("");
+	const [instagram, setInstagram] = useState("");
+	const [youtube, setYoutube] = useState("");
+	const [linkedin, setLinkedin] = useState("");
 
 	useEffect(() => {
 		fetchSupports();
@@ -86,7 +96,12 @@ export default function SupportPage() {
 	const resetForm = () => {
 		setPhone("");
 		setEmail("");
+		setLocation("");
 		setIsPrimary(false);
+		setFacebook("");
+		setInstagram("");
+		setYoutube("");
+		setLinkedin("");
 		setEditMode(false);
 		setSelectedSupportId(null);
 	};
@@ -107,11 +122,17 @@ export default function SupportPage() {
 
 			if (response?.success && response?.data) {
 				const support = response.data;
+				const socialLinks = support.socialLinks || {};
 				setEditMode(true);
 				setSelectedSupportId(support._id);
 				setPhone(support.phone || "");
 				setEmail(support.email || "");
+				setLocation(support.location || "");
 				setIsPrimary(Boolean(support.isPrimary));
+				setFacebook(socialLinks.facebook || "");
+				setInstagram(socialLinks.instagram || "");
+				setYoutube(socialLinks.youtube || "");
+				setLinkedin(socialLinks.linkedin || "");
 				setOpen(true);
 			} else {
 				alert(response?.message || "Failed to fetch support details.");
@@ -140,7 +161,14 @@ export default function SupportPage() {
 			const payload = {
 				phone: phone.trim(),
 				email: email.trim(),
+				location: location.trim(),
 				isPrimary,
+				socialLinks: {
+					facebook: facebook.trim(),
+					instagram: instagram.trim(),
+					youtube: youtube.trim(),
+					linkedin: linkedin.trim(),
+				},
 			};
 
 			const response = await apiCall({
@@ -192,7 +220,21 @@ export default function SupportPage() {
 		return supports.filter((support) => {
 			const p = support.phone?.toLowerCase() || "";
 			const e = support.email?.toLowerCase() || "";
-			return p.includes(query) || e.includes(query);
+			const l = support.location?.toLowerCase() || "";
+			const socialLinks = support.socialLinks || {};
+			const f = socialLinks.facebook?.toLowerCase() || "";
+			const i = socialLinks.instagram?.toLowerCase() || "";
+			const y = socialLinks.youtube?.toLowerCase() || "";
+			const li = socialLinks.linkedin?.toLowerCase() || "";
+			return (
+				p.includes(query) ||
+				e.includes(query) ||
+				l.includes(query) ||
+				f.includes(query) ||
+				i.includes(query) ||
+				y.includes(query) ||
+				li.includes(query)
+			);
 		});
 	}, [supports, searchTerm]);
 
@@ -223,7 +265,7 @@ export default function SupportPage() {
 					<div className="relative w-full sm:max-w-md">
 						<Search className="text-muted-foreground absolute left-2 top-2.5 h-4 w-4" />
 						<Input
-							placeholder="Search by phone or email..."
+							placeholder="Search by phone, email, location or social links..."
 							value={searchTerm}
 							onChange={(e) => setSearchTerm(e.target.value)}
 							className="pl-8"
@@ -284,6 +326,78 @@ export default function SupportPage() {
 										</div>
 									</div>
 
+									<div className="space-y-2">
+										<Label htmlFor="support-location">Location</Label>
+										<div className="relative">
+											<MapPin className="text-muted-foreground pointer-events-none absolute left-2 top-2.5 h-4 w-4" />
+											<Input
+												id="support-location"
+												value={location}
+												onChange={(e) => setLocation(e.target.value)}
+												placeholder="Kolkata, Westbengal"
+												className="pl-8"
+											/>
+										</div>
+									</div>
+
+									<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+										<div className="space-y-2">
+											<Label htmlFor="support-facebook">Facebook</Label>
+											<div className="relative">
+												<Facebook className="text-muted-foreground pointer-events-none absolute left-2 top-2.5 h-4 w-4" />
+												<Input
+													id="support-facebook"
+													value={facebook}
+													onChange={(e) => setFacebook(e.target.value)}
+													placeholder="https://facebook.com/amdaani"
+													className="pl-8"
+												/>
+											</div>
+										</div>
+
+										<div className="space-y-2">
+											<Label htmlFor="support-instagram">Instagram</Label>
+											<div className="relative">
+												<Instagram className="text-muted-foreground pointer-events-none absolute left-2 top-2.5 h-4 w-4" />
+												<Input
+													id="support-instagram"
+													value={instagram}
+													onChange={(e) => setInstagram(e.target.value)}
+													placeholder="https://instagram.com/amdaani"
+													className="pl-8"
+												/>
+											</div>
+										</div>
+
+										<div className="space-y-2">
+											<Label htmlFor="support-youtube">YouTube</Label>
+											<div className="relative">
+												<Youtube className="text-muted-foreground pointer-events-none absolute left-2 top-2.5 h-4 w-4" />
+												<Input
+													id="support-youtube"
+													value={youtube}
+													onChange={(e) => setYoutube(e.target.value)}
+													placeholder="https://youtube.com/amdaani"
+													className="pl-8"
+												/>
+											</div>
+										</div>
+
+										<div className="space-y-2">
+											<Label htmlFor="support-linkedin">LinkedIn</Label>
+											<div className="relative">
+												<Linkedin className="text-muted-foreground pointer-events-none absolute left-2 top-2.5 h-4 w-4" />
+												<Input
+													id="support-linkedin"
+													value={linkedin}
+													onChange={(e) => setLinkedin(e.target.value)}
+													placeholder="https://linkedin.com/company/amdaani"
+													className="pl-8"
+												/>
+											</div>
+										</div>
+									</div>
+
 									<label
 										htmlFor="support-primary"
 										className="flex cursor-pointer items-center gap-2 rounded-md border p-3"
@@ -328,6 +442,8 @@ export default function SupportPage() {
 								<TableRow>
 									<TableHead>Phone</TableHead>
 									<TableHead>Email</TableHead>
+									<TableHead>Location</TableHead>
+									<TableHead>Social Links</TableHead>
 									<TableHead>Primary</TableHead>
 									<TableHead>Created</TableHead>
 									<TableHead>Updated</TableHead>
@@ -338,13 +454,13 @@ export default function SupportPage() {
 							<TableBody>
 								{loading ? (
 									<TableRow>
-										<TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+										<TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
 											Loading supports...
 										</TableCell>
 									</TableRow>
 								) : filteredSupports.length === 0 ? (
 									<TableRow>
-										<TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+										<TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
 											No supports found
 										</TableCell>
 									</TableRow>
@@ -354,6 +470,17 @@ export default function SupportPage() {
 											<TableCell className="font-medium">{support.phone || "N/A"}</TableCell>
 											<TableCell className="max-w-[360px] whitespace-normal">
 												{support.email || "N/A"}
+											</TableCell>
+											<TableCell className="max-w-[280px] whitespace-normal">
+												{support.location || "N/A"}
+											</TableCell>
+											<TableCell>
+												<div className="space-y-1 text-xs">
+													<div>{support.socialLinks?.facebook || "-"}</div>
+													<div>{support.socialLinks?.instagram || "-"}</div>
+													<div>{support.socialLinks?.youtube || "-"}</div>
+													<div>{support.socialLinks?.linkedin || "-"}</div>
+												</div>
 											</TableCell>
 											<TableCell>
 												{support.isPrimary ? (
