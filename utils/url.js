@@ -15,6 +15,7 @@ const URL = {
   allHelpline: `${baseUrl}/helpline/all-helpline`,
   videos: `${baseUrl}/how-to-videos`,
   hero: `${baseUrl}/hero`,
+  heroButton: `${baseUrl}/herobutton`,
   about: `${baseUrl}/about`,
   testimonial: `${baseUrl}/testimonial`,
 };
