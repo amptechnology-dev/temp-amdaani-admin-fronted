@@ -33,53 +33,6 @@ import { apiCall } from "../../../../utils/api";
 import URL from "../../../../utils/url";
 import { toast } from "sonner";
 
-const DESKTOP_BANNER_RATIO = 1920 / 800;
-const MOBILE_BANNER_RATIO = 800 / 1200;
-const RATIO_TOLERANCE = 0.03;
-
-const getImageDimensions = (file) =>
-	new Promise((resolve, reject) => {
-		const objectUrl = globalThis.URL.createObjectURL(file);
-		const image = new Image();
-
-		image.onload = () => {
-			resolve({ width: image.naturalWidth, height: image.naturalHeight });
-			globalThis.URL.revokeObjectURL(objectUrl);
-		};
-
-		image.onerror = () => {
-			reject(new Error("Unable to read selected image."));
-			globalThis.URL.revokeObjectURL(objectUrl);
-		};
-
-		image.src = objectUrl;
-	});
-
-const isRatioMatch = (ratio, targetRatio) =>
-	Math.abs(ratio - targetRatio) <= RATIO_TOLERANCE;
-
-const validateBannerRatio = async (file) => {
-	if (!file || typeof file === "string") {
-		return { valid: true };
-	}
-
-	const { width, height } = await getImageDimensions(file);
-	const imageRatio = width / height;
-
-	const isDesktopRatio = isRatioMatch(imageRatio, DESKTOP_BANNER_RATIO);
-	const isMobileRatio = isRatioMatch(imageRatio, MOBILE_BANNER_RATIO);
-
-	if (isDesktopRatio || isMobileRatio) {
-		return { valid: true };
-	}
-
-	return {
-		valid: false,
-		message:
-			"Invalid banner ratio. Use desktop 1920x800 (12:5) or mobile 800x1200 (2:3).",
-	};
-};
-
 const Hero = () => {
 	const [heroes, setHeroes] = React.useState([]);
 	const [loading, setLoading] = React.useState(false);
@@ -218,17 +171,6 @@ const Hero = () => {
 	const handleAddHero = async () => {
 		if (!phoneImage) return toast.error("Please select an image.");
 
-		try {
-			const validation = await validateBannerRatio(phoneImage);
-			if (!validation.valid) {
-				return toast.error(validation.message);
-			}
-		} catch (error) {
-			return toast.error("Image validation failed.", {
-				description: error.message,
-			});
-		}
-
 		setSubmitting(true);
 		try {
 			const formData = new FormData();
@@ -256,19 +198,6 @@ const Hero = () => {
 
 	// -------------------- Update Hero --------------------
 	const handleUpdateHero = async () => {
-		if (phoneImage && typeof phoneImage !== "string") {
-			try {
-				const validation = await validateBannerRatio(phoneImage);
-				if (!validation.valid) {
-					return toast.error(validation.message);
-				}
-			} catch (error) {
-				return toast.error("Image validation failed.", {
-					description: error.message,
-				});
-			}
-		}
-
 		setSubmitting(true);
 		try {
 			const formData = new FormData();
@@ -499,26 +428,11 @@ const Hero = () => {
 								const file = e.target.files ? e.target.files[0] : null;
 
 								if (!file) return;
-
-								try {
-									const validation = await validateBannerRatio(file);
-									if (!validation.valid) {
-										e.target.value = "";
-										toast.error(validation.message);
-										return;
-									}
-
 									setPhoneImage(file);
-								} catch (error) {
-									e.target.value = "";
-									toast.error("Image validation failed.", {
-										description: error.message,
-									});
-								}
 							}}
 						/>
 						<p className="text-xs text-muted-foreground">
-							Allowed ratios: 1920x800 (12:5) for desktop or 800x1200 (2:3) for mobile.
+								Only images with a size of 1920 × 800 (12:5 ratio) are allowed. Please upload images in this format.
 						</p>
 
 						{phoneImagePreview && (
