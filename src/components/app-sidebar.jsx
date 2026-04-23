@@ -99,6 +99,10 @@ const data = {
           url: "/dashboard/apk",
         },
         {
+          title: "Notification",
+          url: "/dashboard/notifications",
+        },
+        {
           title: "Support",
           url: "/dashboard/supports",
         }

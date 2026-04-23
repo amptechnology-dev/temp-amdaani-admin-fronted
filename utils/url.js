@@ -18,5 +18,6 @@ const URL = {
   heroButton: `${baseUrl}/herobutton`,
   about: `${baseUrl}/about`,
   testimonial: `${baseUrl}/testimonial`,
+  notificationSettings: `${baseUrl}/notification-settings`,
 };
 export default URL;
