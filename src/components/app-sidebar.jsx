@@ -105,6 +105,10 @@ const data = {
         {
           title: "Support",
           url: "/dashboard/supports",
+        },
+        {
+          title: "Referance Settings",
+          url: "/dashboard/referance",
         }
         // {
         //   title: "Settings",

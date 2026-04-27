@@ -19,5 +19,6 @@ const URL = {
   about: `${baseUrl}/about`,
   testimonial: `${baseUrl}/testimonial`,
   notificationSettings: `${baseUrl}/notification-settings`,
+  referralSettings: `${baseUrl}/referral-settings`,
 };
 export default URL;
