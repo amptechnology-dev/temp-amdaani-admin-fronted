@@ -1,35 +1,111 @@
 import { NextResponse } from "next/server";
 
-export function middleware(request) {
-  const token = request.cookies.get("token")?.value || null; // get cookie
-  const { pathname } = request.nextUrl;
+export async function middleware(
+  request
+) {
+  const token =
+    request.cookies.get(
+      "token"
+    )?.value || null;
 
-  // Define protected and public routes
-  const protectedRoutes = ["/dashboard"];
-  const publicRoutes = ["/login", "/auth/login"];
+  const { pathname } =
+    request.nextUrl;
 
-  // Check if path matches
-  const isProtectedRoute = protectedRoutes.some(
-    (route) => pathname === route || pathname.startsWith(route + "/")
-  );
-  const isPublicRoute = publicRoutes.includes(pathname);
+  const protectedRoutes =
+    ["/dashboard"];
 
-  // 🚫 Redirect unauthenticated user trying to access protected route
-  if (isProtectedRoute && !token) {
-    const loginUrl = new URL("/login", request.url);
-    return NextResponse.redirect(loginUrl);
+  const publicRoutes = [
+    "/login",
+    "/auth/login",
+  ];
+
+  const isProtectedRoute =
+    protectedRoutes.some(
+      (route) =>
+        pathname === route ||
+        pathname.startsWith(
+          route + "/"
+        )
+    );
+
+  const isPublicRoute =
+    publicRoutes.includes(
+      pathname
+    );
+
+  let isAuthenticated =
+    false;
+
+  // Verify token with backend
+  if (token) {
+    try {
+
+      const response =
+        await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/auth/verify-session`,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+
+            cache:
+              "no-store",
+          }
+        );
+
+      isAuthenticated =
+        response.ok;
+
+    } catch (error) {
+      isAuthenticated =
+        false;
+    }
   }
 
-  // 🔑 Redirect authenticated user trying to access public route
-  if (isPublicRoute && token) {
-    const dashboardUrl = new URL("/dashboard", request.url);
-    return NextResponse.redirect(dashboardUrl);
+  // Protected route check
+  if (
+    isProtectedRoute &&
+    !isAuthenticated
+  ) {
+
+    const response =
+      NextResponse.redirect(
+        new URL(
+          "/login",
+          request.url
+        )
+      );
+
+    // Remove invalid cookie
+    response.cookies.delete(
+      "token"
+    );
+
+    return response;
+  }
+
+  // Public route check
+  if (
+    isPublicRoute &&
+    isAuthenticated
+  ) {
+    return NextResponse.redirect(
+      new URL(
+        "/dashboard",
+        request.url
+      )
+    );
   }
 
   return NextResponse.next();
 }
 
-// Run middleware on these routes
 export const config = {
-  matcher: ["/dashboard", "/dashboard/:path*", "/login", "/auth/login"],
+  matcher: [
+    "/dashboard",
+    "/dashboard/:path*",
+    "/login",
+    "/auth/login",
+  ],
 };
