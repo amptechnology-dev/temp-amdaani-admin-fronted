@@ -47,8 +47,10 @@ const Testimonials = () => {
 	const [name, setName] = React.useState("");
 	const [designation, setDesignation] = React.useState("");
 	const [message, setMessage] = React.useState("");
+	const [image, setImage] = React.useState(null);
 	const [youtubeLink, setYoutubeLink] = React.useState("");
 	const [isActive, setIsActive] = React.useState(true);
+	const [imagePreview, setImagePreview] = React.useState("");
 
 	const normalizeYoutubeLink = (value) => {
 		const trimmed = value.trim();
@@ -93,6 +95,23 @@ const Testimonials = () => {
 		return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
 	};
 
+	React.useEffect(() => {
+		if (!image) {
+			setImagePreview("");
+			return;
+		}
+
+		if (typeof image === "string") {
+			setImagePreview(image);
+			return;
+		}
+
+		const previewUrl = window.URL.createObjectURL(image);
+		setImagePreview(previewUrl);
+
+		return () => window.URL.revokeObjectURL(previewUrl);
+	}, [image]);
+
 	const fetchTestimonials = async () => {
 		setLoading(true);
 		try {
@@ -127,6 +146,7 @@ const Testimonials = () => {
 		setName("");
 		setDesignation("");
 		setMessage("");
+		setImage(null);
 		setYoutubeLink("");
 		setIsActive(true);
 		setEditMode(false);
@@ -138,6 +158,7 @@ const Testimonials = () => {
 		setName(item.name || "");
 		setDesignation(item.designation || "");
 		setMessage(item.message || "");
+		setImage(item.imageUrl || null);
 		setYoutubeLink(item.youtubeLink || "");
 		setIsActive(item.isActive ?? true);
 		setEditMode(true);
@@ -146,20 +167,33 @@ const Testimonials = () => {
 
 	const validateForm = () => {
 		if (!name.trim()) return "Please enter name.";
-		if (!designation.trim()) return "Please enter designation.";
 		if (!message.trim()) return "Please enter testimonial message.";
-		if (!youtubeLink.trim()) return "Please enter YouTube link.";
 
 		return null;
 	};
 
-	const buildPayload = () => ({
-		name: name.trim(),
-		designation: designation.trim(),
-		message: message.trim(),
-		youtubeLink: normalizeYoutubeLink(youtubeLink),
-		isActive,
-	});
+	const buildPayload = () => {
+		const payload = new FormData();
+
+		payload.append("name", name.trim());
+		payload.append("designation", designation.trim());
+		payload.append("message", message.trim());
+
+		const normalizedYoutubeLink = normalizeYoutubeLink(youtubeLink);
+		if (normalizedYoutubeLink) {
+			payload.append("youtubeLink", normalizedYoutubeLink);
+		}
+
+		if (editMode) {
+			payload.append("isActive", String(isActive));
+		}
+
+		if (image && typeof image !== "string") {
+			payload.append("image", image, image.name);
+		}
+
+		return payload;
+	};
 
 	const handleCreate = async () => {
 		const validationMessage = validateForm();
@@ -269,100 +303,127 @@ const Testimonials = () => {
 
 	const TestimonialFormDialog = () => (
 		<Dialog open={open} onOpenChange={setOpen}>
-			<DialogContent className="max-w-lg">
-				<DialogHeader>
-					<DialogTitle>
-						{editMode ? "Edit Testimonial" : "Create New Testimonial"}
-					</DialogTitle>
-					<DialogDescription>
-						{editMode
-							? "Modify the details of this testimonial."
-							: "Fill in the details to create a new testimonial."}
-					</DialogDescription>
-				</DialogHeader>
-
-				<div className="space-y-4">
-					<div className="space-y-2">
-						<Label htmlFor="name">Name *</Label>
-						<Input
-							id="name"
-							value={name}
-							onChange={(e) => setName(e.target.value)}
-							placeholder="Enter name"
-						/>
+			<DialogContent className="max-h-[90vh] max-w-2xl overflow-hidden p-0">
+				<div className="flex max-h-[90vh] flex-col">
+					<div className="border-b px-6 py-5">
+						<DialogHeader className="space-y-2 text-left">
+							<DialogTitle>
+								{editMode ? "Edit Testimonial" : "Create New Testimonial"}
+							</DialogTitle>
+							<DialogDescription>
+								{editMode
+									? "Modify the details of this testimonial."
+									: "Fill in the details to create a new testimonial."}
+							</DialogDescription>
+						</DialogHeader>
 					</div>
 
-					<div className="space-y-2">
-						<Label htmlFor="designation">Designation *</Label>
-						<Input
-							id="designation"
-							value={designation}
-							onChange={(e) => setDesignation(e.target.value)}
-							placeholder="Shop Owner"
-						/>
-					</div>
+					<div className="overflow-y-auto px-6 py-6">
+						<div className="grid gap-5 md:grid-cols-2">
+							<div className="space-y-2">
+								<Label htmlFor="name">Name *</Label>
+								<Input
+									id="name"
+									value={name}
+									onChange={(e) => setName(e.target.value)}
+									placeholder="Enter name"
+								/>
+							</div>
 
-					<div className="space-y-2">
-						<Label htmlFor="message">Message *</Label>
-						<textarea
-							id="message"
-							value={message}
-							onChange={(e) => setMessage(e.target.value)}
-							placeholder="Amdaani app made my billing system very easy."
-							className="w-full rounded-md border px-3 py-2 text-sm resize-vertical min-h-[96px]"
-						/>
-					</div>
+							<div className="space-y-2">
+								<Label htmlFor="designation">Designation</Label>
+								<Input
+									id="designation"
+									value={designation}
+									onChange={(e) => setDesignation(e.target.value)}
+									placeholder="Shop Owner"
+								/>
+							</div>
 
-					<div className="space-y-2">
-						<Label htmlFor="youtubeLink">YouTube Link *</Label>
-						<Input
-							id="youtubeLink"
-							value={youtubeLink}
-							onChange={(e) => setYoutubeLink(e.target.value)}
-							placeholder="https://www.youtube.com/watch?v=abcd1234"
-						/>
-					</div>
+							<div className="space-y-2 md:col-span-2">
+								<Label htmlFor="message">Message *</Label>
+								<textarea
+									id="message"
+									value={message}
+									onChange={(e) => setMessage(e.target.value)}
+									placeholder="Amdaani app made my billing system very easy."
+									className="min-h-[120px] w-full resize-y rounded-md border px-3 py-2 text-sm"
+								/>
+							</div>
 
-					{editMode && (
-						<div className="flex items-center gap-2">
-							<input
-								id="active"
-								type="checkbox"
-								checked={isActive}
-								onChange={(e) => setIsActive(e.target.checked)}
-							/>
-							<Label htmlFor="active">Active</Label>
+							<div className="space-y-2 md:col-span-2">
+								<Label htmlFor="image">Image</Label>
+								<Input
+									id="image"
+									type="file"
+									accept="image/*"
+									onChange={(event) => setImage(event.target.files?.[0] || null)}
+								/>
+								{imagePreview && (
+									<div className="mt-3 overflow-hidden rounded-xl border bg-muted/20">
+										<img
+											src={imagePreview}
+											alt="Testimonial preview"
+											className="h-56 w-full object-cover"
+										/>
+									</div>
+								)}
+							</div>
+
+							<div className="space-y-2 md:col-span-2">
+								<Label htmlFor="youtubeLink">YouTube Link</Label>
+								<Input
+									id="youtubeLink"
+									value={youtubeLink}
+									onChange={(e) => setYoutubeLink(e.target.value)}
+									placeholder="https://www.youtube.com/watch?v=abcd1234"
+								/>
+							</div>
+
+							{editMode && (
+								<div className="flex items-center gap-2 md:col-span-2">
+									<input
+										id="active"
+										type="checkbox"
+										checked={isActive}
+										onChange={(e) => setIsActive(e.target.checked)}
+									/>
+									<Label htmlFor="active">Active</Label>
+								</div>
+							)}
 						</div>
-					)}
 
-					<Button
-						className="w-full"
-						onClick={editMode ? handleUpdate : handleCreate}
-						disabled={submitting}
-					>
-						{submitting ? (
-							<>
-								<RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-								{editMode ? "Updating..." : "Creating..."}
-							</>
-						) : editMode ? (
-							"Update Testimonial"
-						) : (
-							"Save Testimonial"
-						)}
-					</Button>
+						<div className="mt-6 flex flex-col gap-3 border-t pt-5 sm:flex-row">
+							<Button
+								className="w-full sm:flex-1"
+								onClick={editMode ? handleUpdate : handleCreate}
+								disabled={submitting}
+							>
+								{submitting ? (
+									<>
+										<RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+										{editMode ? "Updating..." : "Creating..."}
+									</>
+								) : editMode ? (
+									"Update Testimonial"
+								) : (
+									"Save Testimonial"
+								)}
+							</Button>
 
-					{editMode && (
-						<Button
-							className="w-full"
-							variant="destructive"
-							onClick={() => handleDelete(selectedId)}
-							disabled={submitting}
-						>
-							<Trash2 className="w-4 h-4 mr-2" />
-							Delete Testimonial
-						</Button>
-					)}
+							{editMode && (
+								<Button
+									className="w-full sm:w-auto"
+									variant="destructive"
+									onClick={() => handleDelete(selectedId)}
+									disabled={submitting}
+								>
+									<Trash2 className="mr-2 h-4 w-4" />
+									Delete Testimonial
+								</Button>
+							)}
+						</div>
+					</div>
 				</div>
 			</DialogContent>
 		</Dialog>
@@ -421,7 +482,7 @@ const Testimonials = () => {
 						</div>
 					) : (
 						testimonials.map((item) => {
-							const thumbnail = getYoutubeThumbnail(item.youtubeLink || "");
+							const thumbnail = item.imageUrl || getYoutubeThumbnail(item.youtubeLink || "");
 
 							return (
 							<div
@@ -431,7 +492,7 @@ const Testimonials = () => {
 								{thumbnail && (
 									<img
 										src={thumbnail}
-										alt={`${item.name} video thumbnail`}
+										alt={item.imageUrl ? `${item.name} image` : `${item.name} video thumbnail`}
 										className="h-44 w-full object-cover"
 									/>
 								)}

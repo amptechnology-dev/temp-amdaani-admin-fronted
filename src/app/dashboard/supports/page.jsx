@@ -146,16 +146,6 @@ export default function SupportPage() {
 	};
 
 	const handleSaveSupport = async () => {
-		if (!phone.trim()) {
-			alert("Please enter a phone number.");
-			return;
-		}
-
-		if (!email.trim()) {
-			alert("Please enter an email address.");
-			return;
-		}
-
 		setSubmitting(true);
 		try {
 			const payload = {
@@ -291,8 +281,8 @@ export default function SupportPage() {
 									<DialogTitle>{editMode ? "Edit Support" : "Create Support"}</DialogTitle>
 									<DialogDescription>
 										{editMode
-											? "Update the support phone and email details."
-											: "Add a new support contact for users."}
+											? "Update the support details. Every field is optional."
+											: "Add a new support contact. Every field is optional."}
 									</DialogDescription>
 								</DialogHeader>
 
