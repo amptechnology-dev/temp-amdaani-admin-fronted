@@ -256,6 +256,10 @@ export default function Stores() {
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
+  const getStoreStaff = (store) => {
+    return store.staffInfo || store.staff || null;
+  };
+
   const exportToExcel = () => {
     if (filteredStores.length === 0) {
       alert("No data to export!");
@@ -640,6 +644,7 @@ export default function Stores() {
                 <TableHead>Store Name</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Contact</TableHead>
+                <TableHead>Staff</TableHead>
                 <TableHead>Location</TableHead>
                 <TableHead>Plan</TableHead>
                 <TableHead>Invoices Used</TableHead>
@@ -708,6 +713,25 @@ export default function Stores() {
                             </span>
                           )}
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {getStoreStaff(store) ? (
+                          <div className="flex flex-col space-y-1">
+                            <span className="text-sm font-medium">
+                              {getStoreStaff(store)?.name || "Unnamed Staff"}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {getStoreStaff(store)?.designation || "N/A"}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {getStoreStaff(store)?.agentCode || ""}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            Not created by Staff
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col space-y-1">
@@ -819,6 +843,29 @@ export default function Stores() {
                                     {selectedStore.address?.country || ""} -{" "}
                                     {selectedStore.address?.postalCode || ""}
                                   </p>
+                                </div>
+
+                                {/* Staff Info */}
+                                <div>
+                                  <h4 className="font-semibold">Staff Info</h4>
+                                  {getStoreStaff(selectedStore) ? (
+                                    <>
+                                      <p>
+                                        Name: {getStoreStaff(selectedStore)?.name || "N/A"}
+                                      </p>
+                                      <p>
+                                        Designation: {getStoreStaff(selectedStore)?.designation || "N/A"}
+                                      </p>
+                                      <p>
+                                        Contact: {getStoreStaff(selectedStore)?.contactNumber || "N/A"}
+                                      </p>
+                                      <p>
+                                        Agent Code: {getStoreStaff(selectedStore)?.agentCode || "N/A"}
+                                      </p>
+                                    </>
+                                  ) : (
+                                    <p>No staff assigned</p>
+                                  )}
                                 </div>
 
                                 {/* Subscription Info */}

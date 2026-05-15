@@ -5,6 +5,7 @@ const URL = {
   plans: `${baseUrl}/plan`,
   appVersion: `${baseUrl}/app-version`,
   uploadApk: `${baseUrl}/app-version/upload-apk`,
+  staff: `${baseUrl}/staff`,
   getOtp: `${baseUrl}/auth/get-otp`,
   register: `${baseUrl}/auth/register-superadmin`,
   verifyOtp: `${baseUrl}/auth/verify-otp-superadmin`,
