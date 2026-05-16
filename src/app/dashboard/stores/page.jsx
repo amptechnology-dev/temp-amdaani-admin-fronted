@@ -123,6 +123,45 @@ export default function Stores() {
     return store.subscription.planName || "Free";
   };
 
+  const getPlanDuration = (store) => {
+    if (!store.subscription) return "N/A";
+
+    const durationDays = store.subscription.durationDays;
+    if (durationDays === null || durationDays === undefined) return "N/A";
+
+    return `${durationDays} days`;
+  };
+
+  const getPlanExpiryDate = (store) => {
+    if (!store.subscription?.endDate) return "N/A";
+
+    return formatDate(store.subscription.endDate);
+  };
+
+  const getPlanExpiryState = (store) => {
+    if (!store.subscription?.endDate) {
+      return {
+        label: "N/A",
+        className: "text-muted-foreground",
+      };
+    }
+
+    const endDate = new Date(store.subscription.endDate);
+    const today = new Date();
+
+    if (endDate < today) {
+      return {
+        label: "Expired",
+        className: "text-red-500 font-medium",
+      };
+    }
+
+    return {
+      label: "Running",
+      className: "text-emerald-600 font-medium",
+    };
+  };
+
   // Get invoice limits with fallback
   const getInvoiceLimits = (store) => {
     if (!store.subscription || isSubscriptionExpired(store.subscription)) {
@@ -750,6 +789,17 @@ export default function Stores() {
                           <span className="text-xs text-muted-foreground">
                             {getInvoiceLimits(store)}
                           </span>
+                          <span className="text-xs text-muted-foreground">
+                            Duration: {getPlanDuration(store)}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            Expiry Date: {getPlanExpiryDate(store)}
+                          </span>
+                          <span
+                            className={`text-xs ${getPlanExpiryState(store).className}`}
+                          >
+                            {getPlanExpiryState(store).label}
+                          </span>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -819,6 +869,14 @@ export default function Stores() {
                                   <p>
                                     GST Number:{" "}
                                     {selectedStore.gstNumber || "N/A"}
+                                    <p>
+                                      Expiry Status:{" "}
+                                      <span
+                                        className={getPlanExpiryState(selectedStore).className}
+                                      >
+                                        {getPlanExpiryState(selectedStore).label}
+                                      </span>
+                                    </p>
                                   </p>
                                   <p>
                                     Registration No:{" "}
@@ -874,6 +932,7 @@ export default function Stores() {
                                     Subscription Info
                                   </h4>
                                   <p>Plan: {plan}</p>
+                                  <p>Duration: {getPlanDuration(selectedStore)}</p>
                                   <p>Start Date: {formatDate(sub.startDate)}</p>
                                   <p>End Date: {formatDate(sub.endDate)}</p>
                                   <p>Days Left: {daysLeft} days</p>

@@ -4,6 +4,8 @@ const URL = {
   ads: `${baseUrl}/ads`,
   plans: `${baseUrl}/plan`,
   appVersion: `${baseUrl}/app-version`,
+  dashboardTracking: `${baseUrl}/dashboard/tracking-dashboard`,
+  userSubscription: `${baseUrl}/subscription/user-subscription`,
   uploadApk: `${baseUrl}/app-version/upload-apk`,
   staff: `${baseUrl}/staff`,
   getOtp: `${baseUrl}/auth/get-otp`,
