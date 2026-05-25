@@ -61,6 +61,7 @@ export default function Stores() {
     status: "all",
     businessType: "all",
   });
+  const [togglingId, setTogglingId] = useState(null);
 
   useEffect(() => {
     fetchStores();
@@ -499,6 +500,44 @@ export default function Stores() {
     return { used, total, remaining };
   };
 
+  const toggleStoreStatus = async (store) => {
+    if (!store?._id) return;
+    const isActive =
+      typeof store.isActive !== "undefined"
+        ? store.isActive
+        : (store.status || "") === "active";
+
+    const confirmMsg = isActive
+      ? `Deactivate store "${store.name || store._id}"?`
+      : `Activate store "${store.name || store._id}"?`;
+
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      setTogglingId(store._id);
+
+      const baseRaw = process.env.NEXT_PUBLIC_API_URL || "";
+      const base = baseRaw.replace(/\/$/, "");
+      const endpoint = base.includes("/api")
+        ? `${base}/auth/toggle-store-status/${store._id}`
+        : `${base}/api/auth/toggle-store-status/${store._id}`;
+
+      const response = await apiCall({ endpoint, method: "PATCH" });
+
+      if (response && response.success) {
+        // Refresh the list to reflect updated status
+        await fetchStores();
+      } else {
+        alert(response?.message || "Failed to toggle store status.");
+      }
+    } catch (err) {
+      console.error("Error toggling store status:", err);
+      alert("Failed to toggle store status. Please try again.");
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -676,7 +715,7 @@ export default function Stores() {
         </div>
 
         {/* Stores Table */}
-        <div className="rounded-md border">
+        <div className="rounded-md border overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -718,6 +757,10 @@ export default function Stores() {
                         Math.ceil((endDate - today) / (1000 * 60 * 60 * 24))
                       )
                     : 0;
+                  const isActive =
+                    typeof store.isActive !== "undefined"
+                      ? store.isActive
+                      : (store.status || "") === "active";
 
                   return (
                     <TableRow key={store._id}>
@@ -833,19 +876,33 @@ export default function Stores() {
                       <TableCell>{getStatusBadge(store)}</TableCell>
                       <TableCell>{formatDate(store.createdAt)}</TableCell>
                       <TableCell>
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setSelectedStore(store)}
-                            >
-                              Details
-                            </Button>
-                          </DialogTrigger>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant={isActive ? "destructive" : "outline"}
+                            size="sm"
+                            onClick={() => toggleStoreStatus(store)}
+                            disabled={togglingId === store._id}
+                          >
+                            {togglingId === store._id
+                              ? "Please wait..."
+                              : isActive
+                              ? "Deactivate"
+                              : "Activate"}
+                          </Button>
 
-                          <DialogContent className="max-w-2xl">
-                            <DialogHeader>
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setSelectedStore(store)}
+                              >
+                                Details
+                              </Button>
+                            </DialogTrigger>
+
+                            <DialogContent className="max-w-2xl w-full max-h-[80vh] p-6 overflow-auto">
+                            <DialogHeader className="sticky top-0 bg-white/80 backdrop-blur-sm z-10 -mx-6 px-6 py-4">
                               <DialogTitle>
                                 {selectedStore?.name || "Store Details"}
                               </DialogTitle>
@@ -866,18 +923,17 @@ export default function Stores() {
                                   <p>
                                     Tagline: {selectedStore.tagline || "N/A"}
                                   </p>
-                                  <p>
-                                    GST Number:{" "}
-                                    {selectedStore.gstNumber || "N/A"}
+                                  <div>
+                                    <p>GST Number: {selectedStore.gstNumber || "N/A"}</p>
                                     <p>
-                                      Expiry Status:{" "}
+                                      Expiry Status: 
                                       <span
                                         className={getPlanExpiryState(selectedStore).className}
                                       >
                                         {getPlanExpiryState(selectedStore).label}
                                       </span>
                                     </p>
-                                  </p>
+                                  </div>
                                   <p>
                                     Registration No:{" "}
                                     {selectedStore.registrationNo || "N/A"}
@@ -962,6 +1018,7 @@ export default function Stores() {
                             )}
                           </DialogContent>
                         </Dialog>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
