@@ -20,6 +20,7 @@ const URL = {
   hero: `${baseUrl}/hero`,
   heroButton: `${baseUrl}/herobutton`,
   about: `${baseUrl}/about`,
+  chatbot: `${baseUrl}/chatbot`,
   testimonial: `${baseUrl}/testimonial`,
   notificationSettings: `${baseUrl}/notification-settings`,
   referralSettings: `${baseUrl}/referral-settings`,

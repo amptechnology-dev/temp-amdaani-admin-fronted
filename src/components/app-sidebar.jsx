@@ -117,6 +117,10 @@ const data = {
         {
           title: "Staffs",
           url: "/dashboard/staffs",
+        },
+        {
+          title: "ChatBot",
+          url: "/dashboard/chatbot",
         }
         // {
         //   title: "Settings",
