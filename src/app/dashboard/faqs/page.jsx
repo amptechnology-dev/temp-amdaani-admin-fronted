@@ -44,6 +44,7 @@ export default function FaqPage() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [isWeb, setIsWeb] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     fetchFaqs();
@@ -78,6 +79,7 @@ export default function FaqPage() {
     setQuestion("");
     setAnswer("");
     setIsWeb(false);
+    setIsMobile(false);
     setEditMode(false);
     setSelectedFaqId(null);
   };
@@ -93,6 +95,7 @@ export default function FaqPage() {
     setQuestion(faq.question || "");
     setAnswer(faq.answer || "");
     setIsWeb(Boolean(faq.isWeb));
+    setIsMobile(Boolean(faq.isMobile));
     setOpen(true);
   };
 
@@ -113,6 +116,7 @@ export default function FaqPage() {
         question: question.trim(),
         answer: answer.trim(),
         isWeb: Boolean(isWeb),
+        isMobile: Boolean(isMobile),
       };
 
       const response = await apiCall({
@@ -269,6 +273,17 @@ export default function FaqPage() {
                     <Label htmlFor="faq-isWeb">Is Web</Label>
                   </div>
 
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="faq-isMobile"
+                      checked={isMobile}
+                      onChange={(e) => setIsMobile(e.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    <Label htmlFor="faq-isMobile">Is Mobile</Label>
+                  </div>
+
                   <Button
                     className="w-full"
                     onClick={handleSaveFaq}
@@ -342,9 +357,13 @@ export default function FaqPage() {
                           <span className="inline-flex items-center rounded-md bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-800">
                             Web
                           </span>
+                        ) : faq.isMobile ? (
+                          <span className="inline-flex items-center rounded-md bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-800">
+                            Mobile
+                          </span>
                         ) : (
                           <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700">
-                            Other
+                            All Platforms
                           </span>
                         )}
                       </TableCell>
