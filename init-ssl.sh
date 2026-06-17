@@ -12,7 +12,7 @@ echo "=== Starting SSL setup for $DOMAIN ==="
 mkdir -p ./nginx/conf.d
 mkdir -p ./certbot/www/.well-known/acme-challenge
 mkdir -p ./certbot/conf
-sudo chown -R ubuntu:ubuntu ./certbot
+chown -R root:root ./certbot
 chmod -R 755 ./certbot
 
 # Writes the final HTTPS reverse-proxy config for the Next.js app
@@ -56,7 +56,7 @@ NGINXEOF
 # ─────────────────────────────────────────────────────────────
 # CASE 1: Certificate already exists → just redeploy app stack
 # ─────────────────────────────────────────────────────────────
-if sudo test -f "$CERT_PATH"; then
+if test -f "$CERT_PATH"; then
   echo "Certificate already exists — skipping SSL generation."
 
   # Make sure the HTTPS config is in place (e.g. fresh clone with existing certs)
@@ -130,14 +130,14 @@ docker run --rm \
   -d "$DOMAIN"
 
 # Fix ownership — certbot container runs as root
-sudo chown -R ubuntu:ubuntu ./certbot
+chown -R root:root ./certbot
 chmod -R 755 ./certbot
 sleep 2
 
 # Verify certificate was actually created
-if ! sudo test -f "$CERT_PATH"; then
+if ! test -f "$CERT_PATH"; then
   echo "ERROR: Certificate not found at $CERT_PATH after certbot run!"
-  sudo ls -la ./certbot/conf/live/ 2>/dev/null || echo "live/ folder does not exist"
+  ls -la ./certbot/conf/live/ 2>/dev/null || echo "live/ folder does not exist"
   docker logs nginx
   exit 1
 fi
