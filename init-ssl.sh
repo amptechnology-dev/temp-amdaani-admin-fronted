@@ -4,7 +4,7 @@ set -e
 
 DOMAIN="amdaani.v1.admin.amptechnology.in"
 EMAIL="devs.amptechnology@gmail.com"
-APP_CONTAINER="office-frontend"
+APP_CONTAINER="nextjs-app"
 APP_PORT="4010"
 
 # Reuse nginx + certbot from the backend project
