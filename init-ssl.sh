@@ -1,23 +1,36 @@
+
 #!/bin/bash
 set -e
 
 DOMAIN="amdaani.v1.admin.amptechnology.in"
 EMAIL="devs.amptechnology@gmail.com"
+APP_CONTAINER="office-frontend"
 APP_PORT="4010"
-CERT_PATH="./certbot/conf/live/$DOMAIN/fullchain.pem"
 
-echo "=== Starting SSL setup for $DOMAIN ==="
+# Reuse nginx + certbot from the backend project
+BACKEND_PROJECT_DIR="/root/amp_portal_backend"
+NGINX_CONF_DIR="$BACKEND_PROJECT_DIR/nginx/conf.d"
+CERTBOT_WWW_DIR="$BACKEND_PROJECT_DIR/certbot/www"
+CERTBOT_CONF_DIR="$BACKEND_PROJECT_DIR/certbot/conf"
 
-# Ensure required directories exist
-mkdir -p ./nginx/conf.d
-mkdir -p ./certbot/www/.well-known/acme-challenge
-mkdir -p ./certbot/conf
-chown -R root:root ./certbot
-chmod -R 755 ./certbot
+CONF_FILE="$NGINX_CONF_DIR/$DOMAIN.conf"
+CERT_PATH="$CERTBOT_CONF_DIR/live/$DOMAIN/fullchain.pem"
 
-# Writes the final HTTPS reverse-proxy config for the Next.js app
+echo "=== Starting SSL setup for $DOMAIN (using existing nginx) ==="
+
+# Make sure the backend nginx is running
+if ! docker ps --format '{{.Names}}' | grep -q '^nginx$'; then
+  echo "ERROR: nginx container is not running."
+  echo "Start the backend project first: cd $BACKEND_PROJECT_DIR && ./init-ssl.sh"
+  exit 1
+fi
+
+mkdir -p "$NGINX_CONF_DIR"
+mkdir -p "$CERTBOT_WWW_DIR/.well-known/acme-challenge"
+mkdir -p "$CERTBOT_CONF_DIR"
+
 write_https_config() {
-cat > ./nginx/conf.d/app.conf << NGINXEOF
+cat > "$CONF_FILE" << NGINXEOF
 server {
     listen 80;
     server_name $DOMAIN;
@@ -39,7 +52,7 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
 
     location / {
-        proxy_pass http://app:$APP_PORT;
+        proxy_pass http://$APP_CONTAINER:$APP_PORT;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -54,19 +67,17 @@ NGINXEOF
 }
 
 # ─────────────────────────────────────────────────────────────
-# CASE 1: Certificate already exists → just redeploy app stack
+# CASE 1: Certificate already exists → just redeploy
 # ─────────────────────────────────────────────────────────────
 if test -f "$CERT_PATH"; then
-  echo "Certificate already exists — skipping SSL generation."
-
-  # Make sure the HTTPS config is in place (e.g. fresh clone with existing certs)
+  echo "Certificate already exists — writing HTTPS config."
   write_https_config
 
-  echo "Redeploying updated app stack..."
+  echo "Building and starting frontend container..."
   docker compose up -d --build --remove-orphans
 
-  sleep 5
-  docker compose exec nginx nginx -s reload || true
+  echo "Reloading nginx..."
+  docker exec nginx nginx -s reload
 
   echo ""
   echo "=== Redeploy complete! ==="
@@ -79,8 +90,8 @@ fi
 # ─────────────────────────────────────────────────────────────
 echo "No certificate found — starting first-time SSL setup..."
 
-# Write a temporary HTTP-only nginx config for ACME challenge
-cat > ./nginx/conf.d/app.conf << NGINXEOF
+# Write temporary HTTP-only config
+cat > "$CONF_FILE" << NGINXEOF
 server {
     listen 80;
     server_name $DOMAIN;
@@ -96,31 +107,22 @@ server {
 }
 NGINXEOF
 
-echo "Temporary HTTP nginx config written."
+echo "Temporary HTTP config written."
 
-# Tear down any existing containers cleanly
-docker compose down || true
+# Reload existing nginx to pick up new domain config
+docker exec nginx nginx -s reload
+sleep 3
 
-# Start nginx only (no app yet)
-docker compose up -d --no-deps nginx
-echo "Waiting for nginx to be ready..."
-sleep 8
+echo "Verifying $DOMAIN responds on port 80..."
+curl -sf -H "Host: $DOMAIN" http://localhost:80 > /dev/null \
+  && echo "Domain responding OK" \
+  || { echo "ERROR: $DOMAIN not responding — check DNS points to this VPS"; docker logs nginx --tail 30; exit 1; }
 
-# Confirm nginx started
-if ! docker ps --format '{{.Names}}' | grep -q '^nginx$'; then
-  echo "ERROR: nginx failed to start!"
-  docker logs nginx
-  exit 1
-fi
-
-echo "nginx is up — verifying port 80..."
-curl -sf http://localhost:80 > /dev/null && echo "port 80 OK" || { echo "ERROR: port 80 not responding"; exit 1; }
-
-# Request certificate from Let's Encrypt
+# Request certificate
 echo "Requesting certificate from Let's Encrypt..."
 docker run --rm \
-  -v "$(pwd)/certbot/www:/var/www/certbot" \
-  -v "$(pwd)/certbot/conf:/etc/letsencrypt" \
+  -v "$CERTBOT_WWW_DIR:/var/www/certbot" \
+  -v "$CERTBOT_CONF_DIR:/etc/letsencrypt" \
   certbot/certbot certonly \
   --webroot \
   --webroot-path=/var/www/certbot \
@@ -129,37 +131,25 @@ docker run --rm \
   --no-eff-email \
   -d "$DOMAIN"
 
-# Fix ownership — certbot container runs as root
-chown -R root:root ./certbot
-chmod -R 755 ./certbot
-sleep 2
-
-# Verify certificate was actually created
 if ! test -f "$CERT_PATH"; then
   echo "ERROR: Certificate not found at $CERT_PATH after certbot run!"
-  ls -la ./certbot/conf/live/ 2>/dev/null || echo "live/ folder does not exist"
-  docker logs nginx
+  ls -la "$CERTBOT_CONF_DIR/live/" 2>/dev/null || echo "live/ folder does not exist"
   exit 1
 fi
 
 echo "Certificate obtained successfully!"
 
-# Write the real HTTPS reverse-proxy config now that certs exist
+# Write real HTTPS config
 write_https_config
-echo "HTTPS nginx config written."
+echo "HTTPS config written."
 
-# Stop the temporary nginx so docker compose up can take over cleanly
-docker compose down nginx || true
-
-# Start the full stack
-echo "Starting full application stack..."
+# Start frontend container
+echo "Starting frontend container..."
 docker compose up -d --build --remove-orphans
 
-echo "Waiting for services to be ready..."
-sleep 8
-
-# Reload nginx with the HTTPS config now that certs exist
-docker compose exec nginx nginx -s reload || true
+# Reload nginx with HTTPS config
+echo "Reloading nginx with HTTPS config..."
+docker exec nginx nginx -s reload
 
 echo ""
 echo "=== SSL setup complete! ==="
