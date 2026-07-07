@@ -62,6 +62,10 @@ export default function Stores() {
     businessType: "all",
   });
   const [togglingId, setTogglingId] = useState(null);
+  const [subDialogOpen, setSubDialogOpen] = useState(false);
+  const [subLoading, setSubLoading] = useState(false);
+  const [subData, setSubData] = useState(null);
+  const [selectedStoreForSub, setSelectedStoreForSub] = useState(null);
 
   useEffect(() => {
     fetchStores();
@@ -70,6 +74,31 @@ export default function Stores() {
   useEffect(() => {
     applyFilters();
   }, [stores, searchTerm, filters]);
+
+  const fetchSubscriptionDetails = async (store) => {
+    setSelectedStoreForSub(store);
+    setSubDialogOpen(true);
+    setSubLoading(true);
+    setSubData(null);
+    try {
+      const response = await apiCall({
+        endpoint: `${URL.subscription}/user-subscription/${store.userId}`, // check exact key name in utils/url.js
+        method: "GET",
+        token: true,
+      });
+
+      if (response?.success && response?.data) {
+        setSubData(response.data);
+      } else {
+        alert(response?.message || "Failed to fetch subscription details.");
+      }
+    } catch (err) {
+      console.error("Error fetching subscription:", err);
+      alert("Failed to fetch subscription details. Please try again.");
+    } finally {
+      setSubLoading(false);
+    }
+  };
 
   const fetchStores = async () => {
     try {
@@ -186,7 +215,7 @@ export default function Stores() {
           store.tagline?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           store.contactNo?.includes(searchTerm) ||
           store.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          store.address?.city?.toLowerCase().includes(searchTerm.toLowerCase())
+          store.address?.city?.toLowerCase().includes(searchTerm.toLowerCase()),
       );
     }
 
@@ -237,7 +266,7 @@ export default function Stores() {
     if (filters.businessType !== "all") {
       filtered = filtered.filter(
         (store) =>
-          store.type?.toLowerCase() === filters.businessType.toLowerCase()
+          store.type?.toLowerCase() === filters.businessType.toLowerCase(),
       );
     }
 
@@ -294,6 +323,21 @@ export default function Stores() {
     };
 
     return <Badge variant={config.variant}>{config.label}</Badge>;
+  };
+
+  const getSubStatusBadgeClass = (status) => {
+    switch (status) {
+      case "active":
+      case "success":
+        return "bg-emerald-600 hover:bg-emerald-600";
+      case "pending":
+        return "bg-amber-500 hover:bg-amber-500";
+      case "canceled":
+      case "failed":
+        return "bg-red-600 hover:bg-red-600";
+      default:
+        return "";
+    }
   };
 
   const getStoreStaff = (store) => {
@@ -447,7 +491,7 @@ export default function Stores() {
         return store[key] || null;
       })
       .filter(
-        (value) => value !== null && value !== undefined && value !== "No Plan"
+        (value) => value !== null && value !== undefined && value !== "No Plan",
       );
 
     return [...new Set(values)];
@@ -498,6 +542,169 @@ export default function Stores() {
       : Math.max(0, total - used);
 
     return { used, total, remaining };
+  };
+
+  const SubscriptionDialog = () => {
+    const currentPlan = subData?.currentPlan;
+    const previousPlan = subData?.previousPlan;
+    const payments = subData?.payments || [];
+
+    return (
+      <Dialog open={subDialogOpen} onOpenChange={setSubDialogOpen}>
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-hidden p-0">
+          <div className="flex max-h-[85vh] flex-col">
+            <div className="border-b px-6 py-5">
+              <DialogHeader className="space-y-1 text-left">
+                <DialogTitle>Subscription Details</DialogTitle>
+                <DialogDescription>
+                  {selectedStoreForSub?.name || "Store"} — subscription &
+                  payment history
+                </DialogDescription>
+              </DialogHeader>
+            </div>
+
+            <div className="overflow-y-auto px-6 py-5 space-y-6">
+              {subLoading ? (
+                <div className="py-10 text-center text-muted-foreground">
+                  Loading subscription...
+                </div>
+              ) : !subData ? (
+                <div className="py-10 text-center text-muted-foreground">
+                  No subscription data found.
+                </div>
+              ) : (
+                <>
+                  {/* Current Plan */}
+                  <div>
+                    <h4 className="mb-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                      Current Plan
+                    </h4>
+                    {currentPlan ? (
+                      <div className="rounded-lg border p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-lg font-semibold">
+                            {currentPlan.planName}
+                          </span>
+                          <Badge
+                            className={getSubStatusBadgeClass(
+                              currentPlan.status,
+                            )}
+                          >
+                            {currentPlan.status}
+                          </Badge>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+                          <span>
+                            Price: ₹{currentPlan.price} /{" "}
+                            {currentPlan.durationDays} days
+                          </span>
+                          <span>
+                            Invoices:{" "}
+                            {currentPlan.usageLimits?.unlimited
+                              ? "Unlimited"
+                              : currentPlan.usageLimits?.invoices}
+                          </span>
+                          <span>
+                            Start: {formatDate(currentPlan.startDate)}
+                          </span>
+                          <span>End: {formatDate(currentPlan.endDate)}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        No active plan.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Previous Plan */}
+                  <div>
+                    <h4 className="mb-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                      Previous Plan
+                    </h4>
+                    {previousPlan ? (
+                      <div className="rounded-lg border p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">
+                            {previousPlan.planName}
+                          </span>
+                          <Badge
+                            variant="secondary"
+                            className={getSubStatusBadgeClass(
+                              previousPlan.status,
+                            )}
+                          >
+                            {previousPlan.status}
+                          </Badge>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+                          <span>
+                            Price: ₹{previousPlan.price} /{" "}
+                            {previousPlan.durationDays} days
+                          </span>
+                          <span>
+                            Invoices:{" "}
+                            {previousPlan.usageLimits?.unlimited
+                              ? "Unlimited"
+                              : previousPlan.usageLimits?.invoices}
+                          </span>
+                          <span>
+                            Start: {formatDate(previousPlan.startDate)}
+                          </span>
+                          <span>End: {formatDate(previousPlan.endDate)}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        No previous plan.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Payment History */}
+                  <div>
+                    <h4 className="mb-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                      Payment History
+                    </h4>
+                    {payments.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No payments found.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {payments.map((payment) => (
+                          <div
+                            key={payment._id}
+                            className="flex items-center justify-between rounded-lg border p-3"
+                          >
+                            <div>
+                              <p className="text-sm font-medium">
+                                ₹{payment.amount} · {payment.method}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {formatDate(
+                                  payment.paidAt || payment.createdAt,
+                                )}{" "}
+                                · {payment.transactionId}
+                              </p>
+                            </div>
+                            <Badge
+                              className={getSubStatusBadgeClass(payment.status)}
+                            >
+                              {payment.status}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
   };
 
   const toggleStoreStatus = async (store) => {
@@ -754,7 +961,7 @@ export default function Stores() {
                   const daysLeft = endDate
                     ? Math.max(
                         0,
-                        Math.ceil((endDate - today) / (1000 * 60 * 60 * 24))
+                        Math.ceil((endDate - today) / (1000 * 60 * 60 * 24)),
                       )
                     : 0;
                   const isActive =
@@ -864,8 +1071,8 @@ export default function Stores() {
                             invoiceUsage.remaining === 0
                               ? "text-red-500"
                               : invoiceUsage.remaining === "Unlimited"
-                              ? "text-green-500"
-                              : "text-blue-500"
+                                ? "text-green-500"
+                                : "text-blue-500"
                           }`}
                         >
                           {invoiceUsage.remaining === "Unlimited"
@@ -886,8 +1093,16 @@ export default function Stores() {
                             {togglingId === store._id
                               ? "Please wait..."
                               : isActive
-                              ? "Deactivate"
-                              : "Activate"}
+                                ? "Deactivate"
+                                : "Activate"}
+                          </Button>
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => fetchSubscriptionDetails(store)}
+                          >
+                            Subscription
                           </Button>
 
                           <Dialog>
@@ -902,122 +1117,145 @@ export default function Stores() {
                             </DialogTrigger>
 
                             <DialogContent className="max-w-2xl w-full max-h-[80vh] p-6 overflow-auto">
-                            <DialogHeader className="sticky top-0 bg-white/80 backdrop-blur-sm z-10 -mx-6 px-6 py-4">
-                              <DialogTitle>
-                                {selectedStore?.name || "Store Details"}
-                              </DialogTitle>
-                              <DialogDescription>
-                                Full details of this store including
-                                subscription and contact info.
-                              </DialogDescription>
-                            </DialogHeader>
+                              <DialogHeader className="sticky top-0 bg-white/80 backdrop-blur-sm z-10 -mx-6 px-6 py-4">
+                                <DialogTitle>
+                                  {selectedStore?.name || "Store Details"}
+                                </DialogTitle>
+                                <DialogDescription>
+                                  Full details of this store including
+                                  subscription and contact info.
+                                </DialogDescription>
+                              </DialogHeader>
 
-                            {selectedStore && (
-                              <div className="space-y-4 mt-4">
-                                {/* Basic Info */}
-                                <div>
-                                  <h4 className="font-semibold">
-                                    Business Info
-                                  </h4>
-                                  <p>Type: {selectedStore.type || "N/A"}</p>
-                                  <p>
-                                    Tagline: {selectedStore.tagline || "N/A"}
-                                  </p>
+                              {selectedStore && (
+                                <div className="space-y-4 mt-4">
+                                  {/* Basic Info */}
                                   <div>
-                                    <p>GST Number: {selectedStore.gstNumber || "N/A"}</p>
+                                    <h4 className="font-semibold">
+                                      Business Info
+                                    </h4>
+                                    <p>Type: {selectedStore.type || "N/A"}</p>
                                     <p>
-                                      Expiry Status: 
-                                      <span
-                                        className={getPlanExpiryState(selectedStore).className}
-                                      >
-                                        {getPlanExpiryState(selectedStore).label}
-                                      </span>
+                                      Tagline: {selectedStore.tagline || "N/A"}
+                                    </p>
+                                    <div>
+                                      <p>
+                                        GST Number:{" "}
+                                        {selectedStore.gstNumber || "N/A"}
+                                      </p>
+                                      <p>
+                                        Expiry Status:
+                                        <span
+                                          className={
+                                            getPlanExpiryState(selectedStore)
+                                              .className
+                                          }
+                                        >
+                                          {
+                                            getPlanExpiryState(selectedStore)
+                                              .label
+                                          }
+                                        </span>
+                                      </p>
+                                    </div>
+                                    <p>
+                                      Registration No:{" "}
+                                      {selectedStore.registrationNo || "N/A"}
                                     </p>
                                   </div>
-                                  <p>
-                                    Registration No:{" "}
-                                    {selectedStore.registrationNo || "N/A"}
-                                  </p>
-                                </div>
 
-                                {/* Contact Info */}
-                                <div>
-                                  <h4 className="font-semibold">
-                                    Contact Info
-                                  </h4>
-                                  <p>Email: {selectedStore.email || "N/A"}</p>
-                                  <p>
-                                    Phone: {selectedStore.contactNo || "N/A"}
-                                  </p>
-                                  <p>
-                                    Address:{" "}
-                                    {selectedStore.address?.street || ""},{" "}
-                                    {selectedStore.address?.city || ""},{" "}
-                                    {selectedStore.address?.state || ""},{" "}
-                                    {selectedStore.address?.country || ""} -{" "}
-                                    {selectedStore.address?.postalCode || ""}
-                                  </p>
-                                </div>
+                                  {/* Contact Info */}
+                                  <div>
+                                    <h4 className="font-semibold">
+                                      Contact Info
+                                    </h4>
+                                    <p>Email: {selectedStore.email || "N/A"}</p>
+                                    <p>
+                                      Phone: {selectedStore.contactNo || "N/A"}
+                                    </p>
+                                    <p>
+                                      Address:{" "}
+                                      {selectedStore.address?.street || ""},{" "}
+                                      {selectedStore.address?.city || ""},{" "}
+                                      {selectedStore.address?.state || ""},{" "}
+                                      {selectedStore.address?.country || ""} -{" "}
+                                      {selectedStore.address?.postalCode || ""}
+                                    </p>
+                                  </div>
 
-                                {/* Staff Info */}
-                                <div>
-                                  <h4 className="font-semibold">Staff Info</h4>
-                                  {getStoreStaff(selectedStore) ? (
-                                    <>
-                                      <p>
-                                        Name: {getStoreStaff(selectedStore)?.name || "N/A"}
-                                      </p>
-                                      <p>
-                                        Designation: {getStoreStaff(selectedStore)?.designation || "N/A"}
-                                      </p>
-                                      <p>
-                                        Contact: {getStoreStaff(selectedStore)?.contactNumber || "N/A"}
-                                      </p>
-                                      <p>
-                                        Agent Code: {getStoreStaff(selectedStore)?.agentCode || "N/A"}
-                                      </p>
-                                    </>
-                                  ) : (
-                                    <p>No staff assigned</p>
-                                  )}
-                                </div>
+                                  {/* Staff Info */}
+                                  <div>
+                                    <h4 className="font-semibold">
+                                      Staff Info
+                                    </h4>
+                                    {getStoreStaff(selectedStore) ? (
+                                      <>
+                                        <p>
+                                          Name:{" "}
+                                          {getStoreStaff(selectedStore)?.name ||
+                                            "N/A"}
+                                        </p>
+                                        <p>
+                                          Designation:{" "}
+                                          {getStoreStaff(selectedStore)
+                                            ?.designation || "N/A"}
+                                        </p>
+                                        <p>
+                                          Contact:{" "}
+                                          {getStoreStaff(selectedStore)
+                                            ?.contactNumber || "N/A"}
+                                        </p>
+                                        <p>
+                                          Agent Code:{" "}
+                                          {getStoreStaff(selectedStore)
+                                            ?.agentCode || "N/A"}
+                                        </p>
+                                      </>
+                                    ) : (
+                                      <p>No staff assigned</p>
+                                    )}
+                                  </div>
 
-                                {/* Subscription Info */}
-                                <div>
-                                  <h4 className="font-semibold">
-                                    Subscription Info
-                                  </h4>
-                                  <p>Plan: {plan}</p>
-                                  <p>Duration: {getPlanDuration(selectedStore)}</p>
-                                  <p>Start Date: {formatDate(sub.startDate)}</p>
-                                  <p>End Date: {formatDate(sub.endDate)}</p>
-                                  <p>Days Left: {daysLeft} days</p>
-                                  <p>
-                                    Status:{" "}
-                                    {getSubscriptionStatus(selectedStore)}
-                                  </p>
-                                </div>
+                                  {/* Subscription Info */}
+                                  <div>
+                                    <h4 className="font-semibold">
+                                      Subscription Info
+                                    </h4>
+                                    <p>Plan: {plan}</p>
+                                    <p>
+                                      Duration: {getPlanDuration(selectedStore)}
+                                    </p>
+                                    <p>
+                                      Start Date: {formatDate(sub.startDate)}
+                                    </p>
+                                    <p>End Date: {formatDate(sub.endDate)}</p>
+                                    <p>Days Left: {daysLeft} days</p>
+                                    <p>
+                                      Status:{" "}
+                                      {getSubscriptionStatus(selectedStore)}
+                                    </p>
+                                  </div>
 
-                                {/* Usage Info */}
-                                <div>
-                                  <h4 className="font-semibold">Usage</h4>
-                                  <p>
-                                    Invoices Used: {invoiceUsage.used} /{" "}
-                                    {invoiceUsage.total === Infinity
-                                      ? "Unlimited"
-                                      : invoiceUsage.total}
-                                  </p>
-                                  <p>
-                                    Remaining:{" "}
-                                    {invoiceUsage.remaining === "Unlimited"
-                                      ? "∞"
-                                      : invoiceUsage.remaining}
-                                  </p>
+                                  {/* Usage Info */}
+                                  <div>
+                                    <h4 className="font-semibold">Usage</h4>
+                                    <p>
+                                      Invoices Used: {invoiceUsage.used} /{" "}
+                                      {invoiceUsage.total === Infinity
+                                        ? "Unlimited"
+                                        : invoiceUsage.total}
+                                    </p>
+                                    <p>
+                                      Remaining:{" "}
+                                      {invoiceUsage.remaining === "Unlimited"
+                                        ? "∞"
+                                        : invoiceUsage.remaining}
+                                    </p>
+                                  </div>
                                 </div>
-                              </div>
-                            )}
-                          </DialogContent>
-                        </Dialog>
+                              )}
+                            </DialogContent>
+                          </Dialog>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -1028,6 +1266,7 @@ export default function Stores() {
           </Table>
         </div>
       </CardContent>
+      {SubscriptionDialog()}
     </Card>
   );
 }
