@@ -49,6 +49,8 @@ import {
   Users,
   ArrowLeft,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Eye } from "lucide-react";
 
 const STAFF_API_URL = URL.staff;
 
@@ -80,6 +82,7 @@ export default function StaffsPage() {
   const [subLoading, setSubLoading] = React.useState(false);
   const [subData, setSubData] = React.useState(null);
   const [selectedStoreForSub, setSelectedStoreForSub] = React.useState(null);
+  const router = useRouter();
 
   const fetchStaffs = React.useCallback(async () => {
     try {
@@ -967,6 +970,15 @@ export default function StaffsPage() {
 
                       <TableCell>
                         <div className="flex items-center justify-end gap-2">
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            onClick={() =>
+                              router.push(`/dashboard/staffs/${staff._id}`)
+                            }
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
                           <Button
                             size="icon"
                             variant="outline"
