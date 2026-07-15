@@ -3,6 +3,7 @@ const baseUrl = process.env.NEXT_PUBLIC_API_URL;
 const URL = {
   ads: `${baseUrl}/ads`,
   plans: `${baseUrl}/plan`,
+  subscription: `${baseUrl}/subscription`,
   appVersion: `${baseUrl}/app-version`,
   dashboardTracking: `${baseUrl}/dashboard/tracking-dashboard`,
   userSubscription: `${baseUrl}/subscription/user-subscription`,
