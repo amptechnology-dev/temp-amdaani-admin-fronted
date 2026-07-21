@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiCall } from "../../../utils/api";
 import URL from "../../../utils/url";
 import {
@@ -21,6 +21,8 @@ const emptyDashboard = {
   registeredWithPlan: emptySection,
 };
 
+/* ---------------------------- formatting utils --------------------------- */
+
 const formatNumber = (value) => {
   if (value === null || value === undefined) return "0";
   return new Intl.NumberFormat("en-IN").format(Number(value) || 0);
@@ -28,7 +30,6 @@ const formatNumber = (value) => {
 
 const formatDateTime = (value) => {
   if (!value) return "-";
-
   try {
     return new Intl.DateTimeFormat("en-IN", {
       dateStyle: "medium",
@@ -40,21 +41,16 @@ const formatDateTime = (value) => {
 };
 
 const trimValue = (value) => {
-  if (typeof value !== "string") {
-    return value ?? "-";
-  }
-
+  if (typeof value !== "string") return value ?? "-";
   const trimmed = value.trim();
   return trimmed || "-";
 };
 
 const joinAddress = (address) => {
   if (!address) return "-";
-
   const parts = [address.street, address.city, address.state, address.country]
     .map(trimValue)
     .filter((part) => part && part !== "-");
-
   return parts.length ? parts.join(", ") : "-";
 };
 
@@ -66,10 +62,8 @@ const safeSection = (section) => ({
 
 const isSameDay = (dateValue) => {
   if (!dateValue) return false;
-
   const current = new Date();
   const target = new Date(dateValue);
-
   return (
     current.getFullYear() === target.getFullYear() &&
     current.getMonth() === target.getMonth() &&
@@ -79,34 +73,26 @@ const isSameDay = (dateValue) => {
 
 const formatMonthValue = (dateValue) => {
   if (!dateValue) return "";
-
   const target = new Date(dateValue);
-  const year = target.getFullYear();
-  const month = String(target.getMonth() + 1).padStart(2, "0");
-
-  return `${year}-${month}`;
+  return `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, "0")}`;
 };
 
 const formatDateValue = (dateValue) => {
   if (!dateValue) return "";
-
   const target = new Date(dateValue);
   const year = target.getFullYear();
   const month = String(target.getMonth() + 1).padStart(2, "0");
   const day = String(target.getDate()).padStart(2, "0");
-
   return `${year}-${month}-${day}`;
 };
 
 const isSameMonth = (dateValue, monthValue) => {
   if (!dateValue || !monthValue) return true;
-
   return formatMonthValue(dateValue) === monthValue;
 };
 
 const isSameDate = (dateValue, dateFilter) => {
   if (!dateValue || !dateFilter) return true;
-
   return formatDateValue(dateValue) === dateFilter;
 };
 
@@ -124,11 +110,57 @@ const formatPlanRange = (startDate, endDate) => {
   return `${formatDateTime(startDate)} - ${formatDateTime(endDate)}`;
 };
 
+/* ---------------------------- row normalizers ----------------------------- */
+// Every bucket is normalized into the same row shape so the table and filters
+// stay generic instead of branching per bucket.
+
+const normalizeVerified = (items) =>
+  items.map((item, idx) => ({
+    id: item?._id || `otp-${item?.phone}-${idx}`,
+    type: "otp",
+    typeLabel: "OTP verified",
+    name: "-",
+    phone: trimValue(item?.phone),
+    email: "-",
+    store: "-",
+    date: item?.otpVerifiedAt,
+    raw: item,
+  }));
+
+const normalizeNoPlan = (items) =>
+  items.map((item, idx) => ({
+    id: item?._id || `reg-${item?.phone}-${idx}`,
+    type: "registered",
+    typeLabel: "Registered",
+    name: trimValue(item?.name),
+    phone: trimValue(item?.phone),
+    email: trimValue(item?.email),
+    store: "-",
+    date: item?.createdAt,
+    raw: item,
+  }));
+
+const normalizeWithPlan = (items) =>
+  items.map((item, idx) => ({
+    id: item?._id || `plan-${item?.amdaaniId}-${idx}`,
+    type: "plan",
+    typeLabel: "Active plan",
+    name: trimValue(item?.name),
+    phone: trimValue(item?.phone),
+    email: trimValue(item?.email),
+    store: trimValue(item?.store?.name),
+    date: item?.createdAt,
+    raw: item,
+  }));
+
+const byDateDesc = (a, b) =>
+  new Date(b?.date || 0).getTime() - new Date(a?.date || 0).getTime();
+
 export default function Page() {
   const [dashboard, setDashboard] = useState(emptyDashboard);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [selectedBucket, setSelectedBucket] = useState("registeredWithPlan");
+  const [selectedBucket, setSelectedBucket] = useState("all");
   const [selectedView, setSelectedView] = useState("overall");
   const [selectedMonth, setSelectedMonth] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
@@ -150,9 +182,7 @@ export default function Page() {
 
       if (response?.success) {
         setDashboard({
-          verifiedNotRegistered: safeSection(
-            response?.data?.verifiedNotRegistered
-          ),
+          verifiedNotRegistered: safeSection(response?.data?.verifiedNotRegistered),
           registeredNoPlan: safeSection(response?.data?.registeredNoPlan),
           registeredWithPlan: safeSection(response?.data?.registeredWithPlan),
         });
@@ -180,11 +210,11 @@ export default function Page() {
     setPlanLoading(false);
   };
 
-  const openPlanDialog = async (user) => {
-    const userId = user?._id || user?.userId;
+  const openPlanDialog = async (rawUser) => {
+    const userId = rawUser?._id || rawUser?.userId;
     if (!userId) return;
 
-    setSelectedPlanUser(user);
+    setSelectedPlanUser(rawUser);
     setSelectedPlanDetails(null);
     setPlanError("");
     setPlanDialogOpen(true);
@@ -209,48 +239,15 @@ export default function Page() {
     }
   };
 
-  const verifiedNotRegistered = dashboard.verifiedNotRegistered.data;
-  const registeredNoPlan = dashboard.registeredNoPlan.data;
-  const registeredWithPlan = dashboard.registeredWithPlan.data;
+  /* --------------------------- derived data --------------------------- */
 
-  const bucketDetails = {
-    verifiedNotRegistered: {
-      title: "OTP verify not register",
-      subtitle: "Users who verified OTP but did not complete signup.",
-      dateField: "otpVerifiedAt",
-      overallItems: verifiedNotRegistered,
-      todayItems: verifiedNotRegistered.filter((item) => isSameDay(item?.otpVerifiedAt)),
-      emptyOverallText: "No OTP verify not register data right now.",
-      emptyTodayText: "No OTP verify not register records found for today.",
-      columns: ["Phone", "OTP verified at"],
-      todayCount: dashboard.verifiedNotRegistered.todayCount,
-      overallCount: dashboard.verifiedNotRegistered.count,
-    },
-    registeredNoPlan: {
-      title: "Register but not take plan",
-      subtitle: "Users who registered but have not taken any plan yet.",
-      dateField: "createdAt",
-      overallItems: registeredNoPlan,
-      todayItems: registeredNoPlan.filter((item) => isSameDay(item?.createdAt)),
-      emptyOverallText: "No register-but-not-plan data right now.",
-      emptyTodayText: "No register-but-not-plan records found for today.",
-      columns: ["Name", "Phone", "Email", "Created"],
-      todayCount: dashboard.registeredNoPlan.todayCount,
-      overallCount: dashboard.registeredNoPlan.count,
-    },
-    registeredWithPlan: {
-      title: "Register with Plan",
-      subtitle: "Users who registered and already have a plan.",
-      dateField: "createdAt",
-      overallItems: registeredWithPlan,
-      todayItems: registeredWithPlan.filter((item) => isSameDay(item?.createdAt)),
-      emptyOverallText: "No registered-with-plan data right now.",
-      emptyTodayText: "No registered-with-plan records found for today.",
-      columns: ["ID", "Name", "Phone", "Store", "Plan", "Created", "Action"],
-      todayCount: dashboard.registeredWithPlan.todayCount,
-      overallCount: dashboard.registeredWithPlan.count,
-    },
-  };
+  const normalized = useMemo(() => {
+    const verified = normalizeVerified(dashboard.verifiedNotRegistered.data);
+    const registered = normalizeNoPlan(dashboard.registeredNoPlan.data);
+    const withPlan = normalizeWithPlan(dashboard.registeredWithPlan.data);
+    const all = [...verified, ...registered, ...withPlan].sort(byDateDesc);
+    return { verified, registered, withPlan, all };
+  }, [dashboard]);
 
   const totalTracked =
     dashboard.verifiedNotRegistered.count +
@@ -262,425 +259,296 @@ export default function Page() {
     dashboard.registeredNoPlan.todayCount +
     dashboard.registeredWithPlan.todayCount;
 
-  const planEligibleTotal =
-    dashboard.registeredNoPlan.count + dashboard.registeredWithPlan.count;
+  const planEligibleTotal = dashboard.registeredNoPlan.count + dashboard.registeredWithPlan.count;
 
   const planAdoption = planEligibleTotal
     ? Math.round((dashboard.registeredWithPlan.count / planEligibleTotal) * 100)
     : 0;
 
-  const verificationShare = totalTracked
-    ? Math.round((dashboard.verifiedNotRegistered.count / totalTracked) * 100)
-    : 0;
-
   const activeStores = new Set(
-    registeredWithPlan.map((item) => item?.store?._id).filter(Boolean)
+    dashboard.registeredWithPlan.data.map((item) => item?.store?._id).filter(Boolean)
   ).size;
 
-  const latestVerification = [...verifiedNotRegistered].sort((a, b) => {
-    const left = new Date(a?.otpVerifiedAt || 0).getTime();
-    const right = new Date(b?.otpVerifiedAt || 0).getTime();
-    return right - left;
-  })[0];
+  const buckets = {
+    all: {
+      label: "All users",
+      description: "Every tracked user across every stage.",
+      items: normalized.all,
+      count: totalTracked,
+      todayCount: todayTracked,
+    },
+    verifiedNotRegistered: {
+      label: "OTP verified, not registered",
+      description: "Verified OTP but did not complete signup.",
+      items: normalized.verified,
+      count: dashboard.verifiedNotRegistered.count,
+      todayCount: dashboard.verifiedNotRegistered.todayCount,
+    },
+    registeredNoPlan: {
+      label: "Registered, no plan",
+      description: "Signed up, no active subscription yet.",
+      items: normalized.registered,
+      count: dashboard.registeredNoPlan.count,
+      todayCount: dashboard.registeredNoPlan.todayCount,
+    },
+    registeredWithPlan: {
+      label: "Registered with plan",
+      description: "Onboarded users on an active plan.",
+      items: normalized.withPlan,
+      count: dashboard.registeredWithPlan.count,
+      todayCount: dashboard.registeredWithPlan.todayCount,
+    },
+  };
 
-  const latestPlanUser = [...registeredWithPlan].sort((a, b) => {
-    const left = new Date(a?.createdAt || 0).getTime();
-    const right = new Date(b?.createdAt || 0).getTime();
-    return right - left;
-  })[0];
+  const activeBucket = buckets[selectedBucket] || buckets.all;
+
+  const filteredItems = useMemo(() => {
+    const source = selectedView === "today"
+      ? activeBucket.items.filter((item) => isSameDay(item.date))
+      : activeBucket.items.filter(
+          (item) => isSameMonth(item.date, selectedMonth) && isSameDate(item.date, selectedDate)
+        );
+    return source;
+  }, [activeBucket, selectedView, selectedMonth, selectedDate]);
+
+  const hasDateFilter = Boolean(selectedMonth || selectedDate);
+  const emptyText =
+    selectedView === "today"
+      ? "No records for today."
+      : hasDateFilter
+        ? "No records match the selected date filter."
+        : "No records found.";
+
+  const kpiCards = [
+    { key: "all", label: "Total tracked", value: totalTracked, hint: `${formatNumber(todayTracked)} today` },
+    { key: "registeredWithPlan", label: "Active stores", value: activeStores, hint: "Linked to a plan" },
+    { key: null, label: "Plan adoption", value: `${planAdoption}%`, hint: `${formatNumber(planEligibleTotal)} eligible users` },
+    { key: null, label: "Today, all stages", value: todayTracked, hint: "New activity today" },
+  ];
 
   const summaryCards = [
     {
       key: "verifiedNotRegistered",
-      title: "OTP verify not register",
-      description: "Users who verified OTP but did not complete signup.",
-      tone: "sky",
-      value: bucketDetails.verifiedNotRegistered.overallCount,
-      today: bucketDetails.verifiedNotRegistered.todayCount,
-      percentage: verificationShare,
+      label: "OTP verified, not registered",
+      value: buckets.verifiedNotRegistered.count,
+      today: buckets.verifiedNotRegistered.todayCount,
     },
     {
       key: "registeredNoPlan",
-      title: "Register but not take plan",
-      description: "Accounts that exist, but have not subscribed yet.",
-      tone: "amber",
-      value: bucketDetails.registeredNoPlan.overallCount,
-      today: bucketDetails.registeredNoPlan.todayCount,
-      percentage: planEligibleTotal
-        ? Math.round((dashboard.registeredNoPlan.count / planEligibleTotal) * 100)
-        : 0,
+      label: "Registered, no plan",
+      value: buckets.registeredNoPlan.count,
+      today: buckets.registeredNoPlan.todayCount,
     },
     {
       key: "registeredWithPlan",
-      title: "Register with Plan",
-      description: "Fully onboarded users with an active store profile.",
-      tone: "emerald",
-      value: bucketDetails.registeredWithPlan.overallCount,
-      today: bucketDetails.registeredWithPlan.todayCount,
-      percentage: planAdoption,
+      label: "Registered with plan",
+      value: buckets.registeredWithPlan.count,
+      today: buckets.registeredWithPlan.todayCount,
     },
   ];
 
-  const selectedBucketData = bucketDetails[selectedBucket] || bucketDetails.registeredWithPlan;
-  const filteredOverallItems = selectedBucketData.overallItems.filter((item) => {
-    const dateValue = item?.[selectedBucketData.dateField];
-
-    return (
-      isSameMonth(dateValue, selectedMonth) &&
-      isSameDate(dateValue, selectedDate)
-    );
-  });
-
-  const selectedItems = selectedView === "today" ? selectedBucketData.todayItems : filteredOverallItems;
-  const selectedEmptyText =
-    selectedView === "today"
-      ? selectedBucketData.emptyTodayText
-      : selectedMonth || selectedDate
-        ? "No records match the selected date filter."
-        : selectedBucketData.emptyOverallText;
-  const showTodayVerifiedList = selectedBucket === "verifiedNotRegistered" && selectedView === "today";
+  const selectBucket = (key, view = "overall") => {
+    setSelectedBucket(key);
+    setSelectedView(view);
+  };
 
   return (
-    <main className="dashboard-shell">
-      <div className="dashboard-orb dashboard-orb-a" />
-      <div className="dashboard-orb dashboard-orb-b" />
-
-      <div className="dashboard-frame">
-        <header className="hero-card">
-          <div className="hero-copy">
-            <div className="hero-pill-row">
-              <span className="hero-pill hero-pill-live">
-                <span className="hero-pill-dot" /> Live dashboard
-              </span>
-              <span className="hero-pill hero-pill-muted">
-                Synced from /dashboard/tracking-dashboard
-              </span>
-            </div>
-
-            <h1>A vibrant command center for onboarding and growth.</h1>
-            <p>
-              Track onboarding progress, verify funnel health, and drill into any
-              bucket by clicking a card to reveal its data table.
-            </p>
-
-            <div className="hero-metric-row">
-              <div className="hero-metric">
-                <span>Total tracked</span>
-                <strong>{loading ? "—" : formatNumber(totalTracked)}</strong>
-              </div>
-              <div className="hero-metric">
-                <span>Today&apos;s registered users</span>
-                <strong>{loading ? "—" : formatNumber(todayTracked)}</strong>
-              </div>
-              <div className="hero-metric">
-                <span>Active stores</span>
-                <strong>{loading ? "—" : formatNumber(activeStores)}</strong>
-              </div>
-              <div className="hero-metric">
-                <span>Plan adoption</span>
-                <strong>{loading ? "—" : `${planAdoption}%`}</strong>
-              </div>
-            </div>
+    <main className="dash">
+      <div className="dash-container">
+        <header className="dash-header">
+          <div>
+            <h1>Onboarding dashboard</h1>
+            <p>Verification, registration, and plan status across all users.</p>
           </div>
-
-          <aside className="hero-panel">
-            <span className="hero-panel-label">Today registered users</span>
-            <div className="hero-panel-value">{loading ? "Loading…" : `${dashboard.registeredWithPlan.todayCount}`}</div>
-            <p>
-              {loading
-                ? "Pulling the latest analytics from the API."
-                : `Click the cards below to switch the table view. ${planAdoption}% of eligible users are already on a plan.`}
-            </p>
-
-            <div className="hero-panel-stack">
-              <div>
-                <span>Latest OTP verification</span>
-                <strong>
-                  {loading
-                    ? "—"
-                    : formatDateTime(latestVerification?.otpVerifiedAt)}
-                </strong>
-              </div>
-              <div>
-                <span>Latest onboarded user</span>
-                <strong>
-                  {loading
-                    ? "—"
-                    : trimValue(latestPlanUser?.name || latestPlanUser?.amdaaniId)}
-                </strong>
-              </div>
-            </div>
-          </aside>
+          <button type="button" className="btn-refresh" onClick={fetchDashboard} disabled={loading}>
+            {loading ? "Refreshing…" : "Refresh"}
+          </button>
         </header>
 
-        <section className="summary-grid">
+        {error ? (
+          <section className="error-banner" role="alert">
+            <div>
+              <strong>Couldn&apos;t load dashboard data</strong>
+              <p>{error}</p>
+            </div>
+            <button type="button" onClick={fetchDashboard}>Retry</button>
+          </section>
+        ) : null}
+
+        <section className="kpi-grid">
+          {kpiCards.map((card) => (
+            <button
+              key={card.label}
+              type="button"
+              className={`kpi-card ${card.key ? "kpi-clickable" : ""} ${card.key && selectedBucket === card.key ? "kpi-active" : ""}`}
+              onClick={card.key ? () => selectBucket(card.key) : undefined}
+              disabled={!card.key}
+            >
+              <span className="kpi-label">{card.label}</span>
+              <strong className="kpi-value">{loading ? "—" : formatNumber(card.value)}</strong>
+              <span className="kpi-hint">{loading ? " " : card.hint}</span>
+            </button>
+          ))}
+        </section>
+
+        <section className="bucket-grid">
           {summaryCards.map((card) => (
             <article
               key={card.key}
+              className={`bucket-card ${selectedBucket === card.key ? "bucket-active" : ""}`}
               role="button"
               tabIndex={0}
-              onClick={() => {
-                setSelectedBucket(card.key);
-                setSelectedView("overall");
-              }}
+              onClick={() => selectBucket(card.key)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
-                  setSelectedBucket(card.key);
-                  setSelectedView("overall");
+                  selectBucket(card.key);
                 }
               }}
-              className={`summary-card summary-card-${card.tone} ${selectedBucket === card.key ? "summary-card-active" : ""}`}
             >
-              <div className="summary-topline">
-                <span>{card.title}</span>
-                <strong>{loading ? "—" : `${card.percentage}%`}</strong>
+              <div className="bucket-card-top">
+                <span className="bucket-title">{card.label}</span>
+                <span className="bucket-count">{loading ? "—" : formatNumber(card.value)}</span>
               </div>
-
-              <div className="summary-value-row">
-                <div>
-                  <span>Current count</span>
-                  <strong>{loading ? "—" : formatNumber(card.value)}</strong>
-                </div>
-                <div>
-                  <span>Today</span>
-                  <strong>{loading ? "—" : formatNumber(card.today)}</strong>
-                </div>
-              </div>
-
-              <p>{card.description}</p>
-
-              <div className="card-action-row">
-                <button
-                  type="button"
-                  className="card-action"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setSelectedBucket(card.key);
-                    setSelectedView("today");
-                  }}
-                >
-                  Today {formatNumber(card.today)}
+              <div className="bucket-actions">
+                <button type="button" onClick={(e) => { e.stopPropagation(); selectBucket(card.key, "today"); }}>
+                  Today · {formatNumber(card.today)}
                 </button>
-                <button
-                  type="button"
-                  className="card-action secondary"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setSelectedBucket(card.key);
-                    setSelectedView("overall");
-                  }}
-                >
-                  Overall {formatNumber(card.value)}
+                <button type="button" className="secondary" onClick={(e) => { e.stopPropagation(); selectBucket(card.key, "overall"); }}>
+                  Overall · {formatNumber(card.value)}
                 </button>
-              </div>
-
-              <div className="progress-rail" aria-hidden="true">
-                <span
-                  className="progress-fill"
-                  style={{ width: loading ? "18%" : `${Math.min(card.percentage, 100)}%` }}
-                />
               </div>
             </article>
           ))}
         </section>
 
-        {error ? (
-          <section className="error-panel" role="alert">
+        <section className="table-panel">
+          <div className="table-panel-head">
             <div>
-              <strong>Dashboard unavailable</strong>
-              <p>{error}</p>
+              <h2>{activeBucket.label}</h2>
+              <p>{activeBucket.description} {selectedView === "today" ? "Showing today only." : "Showing all matching records."}</p>
             </div>
-            <button type="button" onClick={fetchDashboard}>
-              Retry
-            </button>
-          </section>
-        ) : null}
-
-        <section className="detail-panel">
-          <div className="panel-heading detail-heading">
-            <div>
-              <span className="panel-kicker">Selected table</span>
-              <h2>{selectedBucketData.title}</h2>
-              <p>
-                {selectedBucketData.subtitle} {selectedView === "today" ? "Showing today only." : "Showing overall report."}
-              </p>
-              {showTodayVerifiedList ? (
-                <button
-                  type="button"
-                  className="inline-link"
-                  onClick={() => setSelectedView("overall")}
-                >
-                  Show overall OTP verify not register records
-                </button>
-              ) : null}
-
-              {selectedView === "overall" ? (
-                <div className="filter-row">
-                  <label className="filter-field">
-                    <span>Month filter</span>
-                    <input
-                      type="month"
-                      value={selectedMonth}
-                      onChange={(event) => setSelectedMonth(event.target.value)}
-                    />
-                  </label>
-
-                  <label className="filter-field">
-                    <span>Date filter</span>
-                    <input
-                      type="date"
-                      value={selectedDate}
-                      onChange={(event) => setSelectedDate(event.target.value)}
-                    />
-                  </label>
-
-                  <button
-                    type="button"
-                    className="filter-clear"
-                    onClick={() => {
-                      setSelectedMonth("");
-                      setSelectedDate("");
-                    }}
-                  >
-                    Clear filters
-                  </button>
-                </div>
-              ) : null}
-            </div>
-            <span className="panel-count">
-              {loading ? "Loading…" : `${formatNumber(selectedItems.length)} rows`}
-            </span>
+            <span className="row-count">{loading ? "Loading…" : `${formatNumber(filteredItems.length)} records`}</span>
           </div>
 
-          {selectedItems.length ? (
+          <div className="table-controls">
+            <div className="view-toggle">
+              <button
+                type="button"
+                className={selectedView === "overall" ? "active" : ""}
+                onClick={() => setSelectedView("overall")}
+              >
+                Overall
+              </button>
+              <button
+                type="button"
+                className={selectedView === "today" ? "active" : ""}
+                onClick={() => setSelectedView("today")}
+              >
+                Today
+              </button>
+            </div>
+
+            {selectedView === "overall" ? (
+              <div className="filter-row">
+                <label>
+                  <span>Month</span>
+                  <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} />
+                </label>
+                <label>
+                  <span>Date</span>
+                  <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
+                </label>
+                {hasDateFilter ? (
+                  <button type="button" className="clear-filters" onClick={() => { setSelectedMonth(""); setSelectedDate(""); }}>
+                    Clear
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
+          {filteredItems.length ? (
             <div className="table-wrap">
-              <table className="data-table">
+              <table>
                 <thead>
                   <tr>
-                    {selectedBucketData.columns.map((column) => (
-                      <th key={column}>{column}</th>
-                    ))}
+                    <th>Type</th>
+                    <th>Name</th>
+                    <th>Phone</th>
+                    <th>Email</th>
+                    <th>Store</th>
+                    <th>Date</th>
+                    <th aria-label="Actions" />
                   </tr>
                 </thead>
                 <tbody>
-                  {selectedBucket === "verifiedNotRegistered" &&
-                    selectedItems.map((item) => (
-                      <tr key={`${item?.phone}-${item?.otpVerifiedAt}`}>
-                        <td>{trimValue(item?.phone)}</td>
-                        <td>{formatDateTime(item?.otpVerifiedAt)}</td>
-                      </tr>
-                    ))}
-
-                  {selectedBucket === "registeredNoPlan" &&
-                    selectedItems.map((item) => (
-                      <tr key={item?._id || item?.phone}>
-                        <td>{trimValue(item?.name || "-")}</td>
-                        <td>{trimValue(item?.phone)}</td>
-                        <td>{trimValue(item?.email)}</td>
-                        <td>{formatDateTime(item?.createdAt)}</td>
-                      </tr>
-                    ))}
-
-                  {selectedBucket === "registeredWithPlan" &&
-                    selectedItems.map((item) => {
-                      const store = item?.store || {};
-                      const userId = trimValue(item?.amdaaniId || item?._id);
-
-                      return (
-                        <tr key={item?._id || userId}>
-                          <td>{userId}</td>
-                          <td>{trimValue(item?.name)}</td>
-                          <td>{trimValue(item?.phone)}</td>
-                          <td>{trimValue(store?.name)}</td>
-                          <td>
-                            <span className="table-pill table-pill-success">
-                              Active Plan
-                            </span>
-                          </td>
-                          <td>{formatDateTime(item?.createdAt)}</td>
-                          <td>
-                            <button
-                              type="button"
-                              className="view-plan-button"
-                              onClick={() => openPlanDialog(item)}
-                            >
-                              View Plan
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                  {filteredItems.map((item) => (
+                    <tr key={item.id}>
+                      <td><span className={`type-badge type-${item.type}`}>{item.typeLabel}</span></td>
+                      <td>{item.name}</td>
+                      <td>{item.phone}</td>
+                      <td>{item.email}</td>
+                      <td>{item.store}</td>
+                      <td>{formatDateTime(item.date)}</td>
+                      <td>
+                        {item.type === "plan" ? (
+                          <button type="button" className="view-plan-btn" onClick={() => openPlanDialog(item.raw)}>
+                            View plan
+                          </button>
+                        ) : (
+                          <span className="cell-muted">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
           ) : (
-            <div className="empty-state table-empty">
-              <strong>{selectedEmptyText}</strong>
-              <p>Click Today or Overall on any card to switch the table view.</p>
-            </div>
+            <div className="empty-state">{loading ? "Loading records…" : emptyText}</div>
           )}
-
-          <div className="bottom-grid">
-            <article className="panel accent-panel">
-              <span className="panel-kicker">Operational snapshot</span>
-              <h3>Today registered user</h3>
-              <strong>{loading ? "—" : formatNumber(dashboard.registeredWithPlan.todayCount)}</strong>
-              <p>Selected by default so the page opens on the most valuable bucket.</p>
-            </article>
-
-            <article className="panel accent-panel alt">
-              <span className="panel-kicker">Funnel health</span>
-              <h3>Plan adoption</h3>
-              <strong>{loading ? "—" : `${planAdoption}%`}</strong>
-              <p>Shows how many eligible users already moved to a paid plan.</p>
-            </article>
-          </div>
         </section>
       </div>
 
-      <Dialog open={planDialogOpen} onOpenChange={(nextOpen) => (nextOpen ? setPlanDialogOpen(true) : closePlanDialog())}>
-        <DialogContent className="plan-dialog-content !h-[92vh] !max-h-[92vh] !w-[96vw] !max-w-[96vw] overflow-hidden border-0 bg-transparent p-0 shadow-none sm:!w-[92vw] sm:!max-w-[92vw] lg:!w-[88vw] lg:!max-w-[88vw]">
-          <div className="plan-modal-shell">
-            <DialogHeader className="plan-modal-header sr-only">
-              <DialogTitle>
-                {selectedPlanUser?.name || selectedPlanUser?.amdaaniId || "Subscription details"}
-              </DialogTitle>
+      <Dialog open={planDialogOpen} onOpenChange={(next) => (next ? setPlanDialogOpen(true) : closePlanDialog())}>
+        <DialogContent className="plan-dialog-content !h-[90vh] !max-h-[90vh] !w-[94vw] !max-w-[94vw] overflow-hidden border-0 bg-transparent p-0 shadow-none lg:!w-[80vw] lg:!max-w-[80vw]">
+          <div className="plan-modal">
+            <DialogHeader className="plan-modal-header">
+              <DialogTitle>{selectedPlanUser?.name || selectedPlanUser?.amdaaniId || "Subscription details"}</DialogTitle>
             </DialogHeader>
 
             <div className="plan-modal-body">
               {planLoading ? (
-                <div className="plan-empty-state">Loading plan details...</div>
+                <div className="plan-placeholder">Loading plan details…</div>
               ) : planError ? (
-                <div className="plan-empty-state error">
+                <div className="plan-placeholder plan-error">
                   <strong>Unable to load subscription</strong>
                   <p>{planError}</p>
                 </div>
               ) : selectedPlanDetails ? (
                 <>
-                  <div className="plan-hero-grid">
-                    <article className="plan-hero-card accent-a">
-                      <span>Current Plan</span>
+                  <div className="plan-summary-grid">
+                    <div className="plan-summary-card">
+                      <span>Current plan</span>
                       <strong>{trimValue(selectedPlanDetails?.currentPlan?.planName)}</strong>
                       <p>{trimValue(selectedPlanDetails?.currentPlan?.plan?.description)}</p>
-                    </article>
-                    <article className="plan-hero-card accent-b">
-                      <span>Expiry Date</span>
+                    </div>
+                    <div className="plan-summary-card">
+                      <span>Expiry date</span>
                       <strong>{formatDateTime(selectedPlanDetails?.currentPlan?.endDate)}</strong>
                       <p>{formatPlanRange(selectedPlanDetails?.currentPlan?.startDate, selectedPlanDetails?.currentPlan?.endDate)}</p>
-                    </article>
-                    <article className="plan-hero-card accent-c">
-                      <span>Payment Count</span>
+                    </div>
+                    <div className="plan-summary-card">
+                      <span>Payments</span>
                       <strong>{formatNumber(selectedPlanDetails?.payments?.length || 0)}</strong>
-                      <p>Successful payment history linked to this account.</p>
-                    </article>
+                      <p>Recorded payments on this account.</p>
+                    </div>
                   </div>
 
                   <div className="plan-detail-grid">
                     <section className="plan-section">
-                      <div className="plan-section-head">
-                        <h3>User & Store</h3>
-                      </div>
+                      <h3>User &amp; store</h3>
                       <div className="plan-detail-list">
                         <div><span>User ID</span><strong>{trimValue(selectedPlanDetails?.user?.amdaaniId)}</strong></div>
                         <div><span>Name</span><strong>{trimValue(selectedPlanDetails?.user?.name)}</strong></div>
@@ -692,44 +560,38 @@ export default function Page() {
                     </section>
 
                     <section className="plan-section">
-                      <div className="plan-section-head">
-                        <h3>Current Plan</h3>
-                      </div>
+                      <h3>Current plan</h3>
                       <div className="plan-detail-list">
-                        <div><span>Plan Name</span><strong>{trimValue(selectedPlanDetails?.currentPlan?.planName)}</strong></div>
+                        <div><span>Plan name</span><strong>{trimValue(selectedPlanDetails?.currentPlan?.planName)}</strong></div>
                         <div><span>Status</span><strong>{trimValue(selectedPlanDetails?.currentPlan?.status)}</strong></div>
                         <div><span>Price</span><strong>{formatCurrency(selectedPlanDetails?.currentPlan?.price)}</strong></div>
                         <div><span>Duration</span><strong>{formatNumber(selectedPlanDetails?.currentPlan?.durationDays)} days</strong></div>
-                        <div><span>Start Date</span><strong>{formatDateTime(selectedPlanDetails?.currentPlan?.startDate)}</strong></div>
-                        <div><span>End Date</span><strong>{formatDateTime(selectedPlanDetails?.currentPlan?.endDate)}</strong></div>
+                        <div><span>Start date</span><strong>{formatDateTime(selectedPlanDetails?.currentPlan?.startDate)}</strong></div>
+                        <div><span>End date</span><strong>{formatDateTime(selectedPlanDetails?.currentPlan?.endDate)}</strong></div>
                       </div>
                     </section>
                   </div>
 
                   <section className="plan-section">
-                    <div className="plan-section-head">
-                      <h3>Previous Plan</h3>
-                    </div>
+                    <h3>Previous plan</h3>
                     {selectedPlanDetails?.previousPlan ? (
                       <div className="plan-detail-list two-col">
-                        <div><span>Plan Name</span><strong>{trimValue(selectedPlanDetails?.previousPlan?.planName)}</strong></div>
+                        <div><span>Plan name</span><strong>{trimValue(selectedPlanDetails?.previousPlan?.planName)}</strong></div>
                         <div><span>Status</span><strong>{trimValue(selectedPlanDetails?.previousPlan?.status)}</strong></div>
-                        <div><span>Start Date</span><strong>{formatDateTime(selectedPlanDetails?.previousPlan?.startDate)}</strong></div>
-                        <div><span>End Date</span><strong>{formatDateTime(selectedPlanDetails?.previousPlan?.endDate)}</strong></div>
+                        <div><span>Start date</span><strong>{formatDateTime(selectedPlanDetails?.previousPlan?.startDate)}</strong></div>
+                        <div><span>End date</span><strong>{formatDateTime(selectedPlanDetails?.previousPlan?.endDate)}</strong></div>
                       </div>
                     ) : (
-                      <div className="plan-empty-inline">No previous plan found.</div>
+                      <div className="plan-placeholder-inline">No previous plan found.</div>
                     )}
                   </section>
 
                   <section className="plan-section">
-                    <div className="plan-section-head">
-                      <h3>Upcoming Plans</h3>
-                    </div>
+                    <h3>Upcoming plans</h3>
                     {Array.isArray(selectedPlanDetails?.upcomingPlans) && selectedPlanDetails.upcomingPlans.length ? (
-                      <div className="plan-card-list">
+                      <div className="plan-list">
                         {selectedPlanDetails.upcomingPlans.map((plan, index) => (
-                          <article key={plan?._id || index} className="plan-small-card">
+                          <article key={plan?._id || index} className="plan-list-item">
                             <strong>{trimValue(plan?.planName || plan?.plan?.name)}</strong>
                             <span>{trimValue(plan?.status)}</span>
                             <p>{formatPlanRange(plan?.startDate, plan?.endDate)}</p>
@@ -737,38 +599,36 @@ export default function Page() {
                         ))}
                       </div>
                     ) : (
-                      <div className="plan-empty-inline">No upcoming plans available.</div>
+                      <div className="plan-placeholder-inline">No upcoming plans available.</div>
                     )}
                   </section>
 
                   <section className="plan-section">
-                    <div className="plan-section-head">
-                      <h3>Payment History</h3>
-                    </div>
+                    <h3>Payment history</h3>
                     {Array.isArray(selectedPlanDetails?.payments) && selectedPlanDetails.payments.length ? (
                       <div className="payment-list">
                         {selectedPlanDetails.payments.map((payment) => (
-                          <article key={payment?._id} className="payment-card">
-                            <div className="payment-row">
+                          <article key={payment?._id} className="payment-item">
+                            <div className="payment-item-top">
                               <strong>{formatCurrency(payment?.amount)}</strong>
-                              <span className="payment-status success">{trimValue(payment?.status)}</span>
+                              <span className="payment-status">{trimValue(payment?.status)}</span>
                             </div>
-                            <div className="payment-meta-grid">
+                            <div className="payment-meta">
                               <div><span>Method</span><strong>{trimValue(payment?.method)}</strong></div>
                               <div><span>Transaction</span><strong>{trimValue(payment?.transactionId)}</strong></div>
-                              <div><span>Paid At</span><strong>{formatDateTime(payment?.paidAt || payment?.createdAt)}</strong></div>
-                              <div><span>Wallet Used</span><strong>{formatCurrency(payment?.walletUsed)}</strong></div>
+                              <div><span>Paid at</span><strong>{formatDateTime(payment?.paidAt || payment?.createdAt)}</strong></div>
+                              <div><span>Wallet used</span><strong>{formatCurrency(payment?.walletUsed)}</strong></div>
                             </div>
                           </article>
                         ))}
                       </div>
                     ) : (
-                      <div className="plan-empty-inline">No payment history found.</div>
+                      <div className="plan-placeholder-inline">No payment history found.</div>
                     )}
                   </section>
                 </>
               ) : (
-                <div className="plan-empty-state">No subscription data available.</div>
+                <div className="plan-placeholder">No subscription data available.</div>
               )}
             </div>
           </div>
@@ -776,1084 +636,623 @@ export default function Page() {
       </Dialog>
 
       <style jsx>{`
-        .dashboard-shell {
-          position: relative;
+        :root {
+          --ink: #0f172a;
+          --ink-muted: #52607a;
+          --border: #e2e6ee;
+          --surface: #ffffff;
+          --surface-muted: #f6f8fb;
+          --accent: #2653eb;
+          --accent-soft: #eaf0ff;
+          --success: #147a4a;
+          --success-soft: #e5f6ec;
+          --danger: #b3261e;
+          --danger-soft: #fdecea;
+        }
+
+        .dash {
           min-height: 100svh;
-          overflow: hidden;
-          background:
-            radial-gradient(circle at top left, rgba(255, 190, 11, 0.22), transparent 30%),
-            radial-gradient(circle at top right, rgba(56, 189, 248, 0.22), transparent 28%),
-            radial-gradient(circle at bottom left, rgba(236, 72, 153, 0.16), transparent 28%),
-            linear-gradient(180deg, #fffaf2 0%, #f4fbff 48%, #eefaf4 100%);
-          color: #12324a;
+          background: var(--surface-muted);
+          color: var(--ink);
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
         }
 
-        .dashboard-orb {
-          position: absolute;
-          border-radius: 999px;
-          filter: blur(8px);
-          opacity: 0.75;
-          pointer-events: none;
-        }
-
-        .dashboard-orb-a {
-          top: -8rem;
-          left: -4rem;
-          width: 22rem;
-          height: 22rem;
-          background: radial-gradient(circle, rgba(250, 204, 21, 0.35), transparent 72%);
-        }
-
-        .dashboard-orb-b {
-          right: -6rem;
-          top: 8rem;
-          width: 18rem;
-          height: 18rem;
-          background: radial-gradient(circle, rgba(34, 197, 94, 0.26), transparent 70%);
-        }
-
-        .dashboard-frame {
-          position: relative;
-          z-index: 1;
-          width: min(1440px, calc(100% - 2rem));
+        .dash-container {
+          width: min(1280px, calc(100% - 2.5rem));
           margin: 0 auto;
-          padding: 1.25rem 0 2rem;
+          padding: 2rem 0 3rem;
         }
 
-        .hero-card,
-        .summary-card,
-        .panel,
-        .error-panel {
-          border: 1px solid rgba(130, 149, 170, 0.16);
-          box-shadow: 0 18px 45px rgba(32, 63, 92, 0.12);
-          backdrop-filter: blur(10px);
-        }
-
-        .hero-card {
-          display: grid;
-          grid-template-columns: minmax(0, 1.7fr) minmax(300px, 0.9fr);
-          gap: 1rem;
-          padding: 1.3rem;
-          border-radius: 28px;
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 249, 237, 0.92));
-        }
-
-        .hero-copy h1 {
-          margin: 1rem 0 0.7rem;
-          max-width: 14ch;
-          font-size: clamp(2.2rem, 4vw, 4.5rem);
-          line-height: 0.95;
-          letter-spacing: -0.05em;
-          color: #0f2f46;
-        }
-
-        .hero-copy p {
-          max-width: 60ch;
-          margin: 0;
-          color: rgba(30, 64, 92, 0.78);
-          font-size: 1rem;
-          line-height: 1.7;
-        }
-
-        .hero-pill-row {
+        .dash-header {
           display: flex;
-          flex-wrap: wrap;
-          gap: 0.65rem;
-          align-items: center;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 1rem;
+          margin-bottom: 1.5rem;
         }
 
-        .hero-pill {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.45rem;
-          padding: 0.5rem 0.85rem;
-          border-radius: 999px;
-          font-size: 0.78rem;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-          border: 1px solid rgba(130, 149, 170, 0.18);
-        }
-
-        .hero-pill-live {
-          color: #0f766e;
-          background: rgba(45, 212, 191, 0.18);
-        }
-
-        .hero-pill-muted {
-          color: rgba(15, 47, 70, 0.82);
-          background: rgba(255, 255, 255, 0.76);
-        }
-
-        .hero-pill-dot {
-          width: 0.45rem;
-          height: 0.45rem;
-          border-radius: 50%;
-          background: #22c55e;
-          box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55);
-          animation: pulse 1.8s infinite;
-        }
-
-        .hero-metric-row {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 0.8rem;
-          margin-top: 1.25rem;
-        }
-
-        .hero-metric {
-          padding: 0.95rem 1rem;
-          border-radius: 20px;
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(250, 253, 255, 0.98));
-          border: 1px solid rgba(148, 163, 184, 0.14);
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
-        }
-
-        .hero-metric span,
-        .hero-panel-label,
-        .panel-kicker,
-        .summary-card p,
-        .record-meta-grid span,
-        .mini-row span,
-        .snapshot-grid span,
-        .empty-state p,
-        .hero-panel p,
-        .summary-topline span,
-        .summary-value-row span,
-        .detail-heading p,
-        .accent-panel p {
-          color: rgba(57, 82, 104, 0.76);
-        }
-
-        .hero-metric strong,
-        .hero-panel-value,
-        .summary-topline strong,
-        .summary-value-row strong,
-        .panel-count,
-        .record-id,
-        .record-card h3,
-        .record-meta-grid strong,
-        .mini-row strong,
-        .snapshot-grid strong,
-        .empty-state strong,
-        .detail-heading h2,
-        .accent-panel strong {
-          color: #0c2941;
-        }
-
-        .hero-metric strong {
-          display: block;
-          margin-top: 0.4rem;
+        .dash-header h1 {
+          margin: 0;
           font-size: 1.5rem;
-          letter-spacing: -0.04em;
-          color: #0c2941;
+          font-weight: 700;
+          letter-spacing: -0.01em;
         }
 
-        .hero-panel {
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          padding: 1.1rem;
-          border-radius: 24px;
-          background:
-            linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(228, 252, 245, 0.94)),
-            radial-gradient(circle at top right, rgba(56, 189, 248, 0.16), transparent 50%);
-          border: 1px solid rgba(148, 163, 184, 0.16);
-        }
-
-        .hero-panel-value {
-          margin: 0.5rem 0;
-          font-size: clamp(2.3rem, 4vw, 3.8rem);
-          line-height: 1;
-          letter-spacing: -0.06em;
-          color: #0f766e;
-        }
-
-        .hero-panel p {
-          margin: 0;
-          line-height: 1.7;
-        }
-
-        .hero-panel-stack {
-          display: grid;
-          gap: 0.75rem;
-          margin-top: 1rem;
-        }
-
-        .hero-panel-stack div {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 1rem;
-          padding: 0.88rem 1rem;
-          border-radius: 18px;
-          background: rgba(255, 255, 255, 0.82);
-          border: 1px solid rgba(148, 163, 184, 0.12);
-        }
-
-        .hero-panel-stack span,
-        .hero-panel-stack strong {
+        .dash-header p {
+          margin: 0.3rem 0 0;
+          color: var(--ink-muted);
           font-size: 0.92rem;
         }
 
-        .summary-grid {
+        .btn-refresh {
+          border: 1px solid var(--border);
+          background: var(--surface);
+          color: var(--ink);
+          border-radius: 8px;
+          padding: 0.6rem 1rem;
+          font-size: 0.88rem;
+          font-weight: 600;
+          cursor: pointer;
+        }
+
+        .btn-refresh:hover {
+          border-color: var(--accent);
+          color: var(--accent);
+        }
+
+        .btn-refresh:disabled {
+          cursor: default;
+          opacity: 0.6;
+        }
+
+        .error-banner {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 1rem;
+          padding: 0.9rem 1.1rem;
+          border-radius: 10px;
+          background: var(--danger-soft);
+          border: 1px solid rgba(179, 38, 30, 0.2);
+          margin-bottom: 1.5rem;
+        }
+
+        .error-banner strong {
+          color: var(--danger);
+        }
+
+        .error-banner p {
+          margin: 0.2rem 0 0;
+          color: var(--ink-muted);
+          font-size: 0.88rem;
+        }
+
+        .error-banner button {
+          border: 1px solid rgba(179, 38, 30, 0.35);
+          background: var(--surface);
+          color: var(--danger);
+          border-radius: 8px;
+          padding: 0.55rem 0.9rem;
+          font-weight: 600;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+
+        .kpi-grid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 0.9rem;
+          margin-bottom: 1.5rem;
+        }
+
+        .kpi-card {
+          text-align: left;
+          display: grid;
+          gap: 0.35rem;
+          padding: 1rem 1.1rem;
+          border-radius: 12px;
+          border: 1px solid var(--border);
+          background: var(--surface);
+          font: inherit;
+          color: inherit;
+          cursor: default;
+        }
+
+        .kpi-clickable {
+          cursor: pointer;
+        }
+
+        .kpi-clickable:hover {
+          border-color: var(--accent);
+        }
+
+        .kpi-active {
+          border-color: var(--accent);
+          box-shadow: 0 0 0 1px var(--accent);
+        }
+
+        .kpi-label {
+          font-size: 0.78rem;
+          color: var(--ink-muted);
+          font-weight: 600;
+        }
+
+        .kpi-value {
+          font-size: 1.6rem;
+          font-weight: 700;
+          letter-spacing: -0.02em;
+        }
+
+        .kpi-hint {
+          font-size: 0.78rem;
+          color: var(--ink-muted);
+        }
+
+        .bucket-grid {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 1rem;
-          margin-top: 1rem;
+          gap: 0.9rem;
+          margin-bottom: 1.5rem;
         }
 
-        .summary-card {
-          position: relative;
-          overflow: hidden;
-          border-radius: 24px;
-          padding: 1.1rem;
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(250, 251, 255, 0.95));
+        .bucket-card {
+          border: 1px solid var(--border);
+          background: var(--surface);
+          border-radius: 12px;
+          padding: 1rem 1.1rem;
+          cursor: pointer;
         }
 
-        .card-action-row {
-          position: relative;
-          z-index: 1;
+        .bucket-card:hover {
+          border-color: var(--accent);
+        }
+
+        .bucket-active {
+          border-color: var(--accent);
+          background: var(--accent-soft);
+        }
+
+        .bucket-card-top {
           display: flex;
-          flex-wrap: wrap;
-          gap: 0.6rem;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 0.75rem;
+        }
+
+        .bucket-title {
+          font-size: 0.9rem;
+          font-weight: 600;
+          color: var(--ink);
+        }
+
+        .bucket-count {
+          font-size: 1.3rem;
+          font-weight: 700;
+        }
+
+        .bucket-actions {
+          display: flex;
+          gap: 0.5rem;
           margin-top: 0.85rem;
         }
 
-        .card-action {
-          border: 0;
+        .bucket-actions button {
+          flex: 1;
+          border: 1px solid var(--border);
+          background: var(--surface);
+          border-radius: 7px;
+          padding: 0.45rem 0.6rem;
+          font-size: 0.8rem;
+          font-weight: 600;
+          color: var(--ink);
           cursor: pointer;
-          padding: 0.72rem 0.95rem;
-          border-radius: 999px;
-          color: #fff;
-          background: linear-gradient(135deg, #06b6d4, #8b5cf6);
-          font-weight: 700;
-          box-shadow: 0 12px 24px rgba(59, 130, 246, 0.18);
         }
 
-        .card-action.secondary {
-          background: linear-gradient(135deg, #f59e0b, #ef4444);
+        .bucket-actions button.secondary {
+          background: var(--surface-muted);
         }
 
-        .view-plan-button {
-          border: 0;
-          cursor: pointer;
-          padding: 0.7rem 0.95rem;
+        .bucket-actions button:hover {
+          border-color: var(--accent);
+          color: var(--accent);
+        }
+
+        .table-panel {
+          border: 1px solid var(--border);
+          background: var(--surface);
+          border-radius: 14px;
+          padding: 1.2rem;
+        }
+
+        .table-panel-head {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 1rem;
+        }
+
+        .table-panel-head h2 {
+          margin: 0;
+          font-size: 1.1rem;
+        }
+
+        .table-panel-head p {
+          margin: 0.25rem 0 0;
+          color: var(--ink-muted);
+          font-size: 0.86rem;
+        }
+
+        .row-count {
+          white-space: nowrap;
+          font-size: 0.82rem;
+          color: var(--ink-muted);
+          padding: 0.4rem 0.7rem;
           border-radius: 999px;
+          background: var(--surface-muted);
+          border: 1px solid var(--border);
+        }
+
+        .table-controls {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: flex-end;
+          justify-content: space-between;
+          gap: 0.9rem;
+          margin: 1rem 0;
+        }
+
+        .view-toggle {
+          display: inline-flex;
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          overflow: hidden;
+        }
+
+        .view-toggle button {
+          border: 0;
+          background: var(--surface);
+          padding: 0.5rem 1rem;
+          font-size: 0.84rem;
+          font-weight: 600;
+          color: var(--ink-muted);
+          cursor: pointer;
+        }
+
+        .view-toggle button.active {
+          background: var(--accent);
           color: #fff;
-          background: linear-gradient(135deg, #2563eb, #7c3aed);
-          font-weight: 700;
-          box-shadow: 0 12px 24px rgba(59, 130, 246, 0.18);
         }
 
         .filter-row {
           display: flex;
           flex-wrap: wrap;
-          gap: 0.75rem;
-          margin-top: 0.85rem;
+          align-items: flex-end;
+          gap: 0.6rem;
         }
 
-        .filter-field {
-          display: grid;
-          gap: 0.35rem;
-          min-width: 180px;
-        }
-
-        .filter-field span {
-          font-size: 0.74rem;
-          letter-spacing: 0.1em;
-          text-transform: uppercase;
-          color: rgba(57, 82, 104, 0.76);
-        }
-
-        .filter-field input {
-          width: 100%;
-          border: 1px solid rgba(148, 163, 184, 0.22);
-          border-radius: 14px;
-          padding: 0.8rem 0.9rem;
-          background: rgba(255, 255, 255, 0.95);
-          color: #17324a;
-          outline: none;
-        }
-
-        .filter-field input:focus {
-          border-color: rgba(59, 130, 246, 0.45);
-          box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12);
-        }
-
-        .filter-clear {
-          align-self: end;
-          border: 1px solid rgba(148, 163, 184, 0.22);
-          background: rgba(255, 255, 255, 0.92);
-          color: #0f2f46;
-          border-radius: 999px;
-          padding: 0.8rem 1rem;
-          font-weight: 700;
-          cursor: pointer;
-        }
-
-        .summary-card::before {
-          content: "";
-          position: absolute;
-          inset: auto -25% -35% auto;
-          width: 8rem;
-          height: 8rem;
-          border-radius: 999px;
-          filter: blur(4px);
-          opacity: 0.28;
-        }
-
-        .summary-card-sky::before {
-          background: radial-gradient(circle, rgba(56, 189, 248, 0.9), transparent 65%);
-        }
-
-        .summary-card-amber::before {
-          background: radial-gradient(circle, rgba(245, 158, 11, 0.95), transparent 65%);
-        }
-
-        .summary-card-emerald::before {
-          background: radial-gradient(circle, rgba(16, 185, 129, 0.95), transparent 65%);
-        }
-
-        .summary-topline,
-        .summary-value-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 1rem;
-        }
-
-        .summary-topline strong {
-          font-size: 1.3rem;
-          letter-spacing: -0.04em;
-          color: #0f766e;
-        }
-
-        .summary-card p {
-          margin: 0.9rem 0 1rem;
-          line-height: 1.6;
-        }
-
-        .summary-value-row div {
-          display: grid;
-          gap: 0.25rem;
-        }
-
-        .summary-value-row strong {
-          font-size: 1.25rem;
-          letter-spacing: -0.03em;
-          color: #0c2941;
-        }
-
-        .progress-rail {
-          margin-top: 1rem;
-          height: 0.42rem;
-          border-radius: 999px;
-          background: rgba(148, 163, 184, 0.12);
-          overflow: hidden;
-        }
-
-        .progress-fill {
-          display: block;
-          height: 100%;
-          border-radius: inherit;
-          background: linear-gradient(90deg, rgba(59, 130, 246, 1), rgba(168, 85, 247, 1), rgba(34, 197, 94, 1));
-          box-shadow: 0 0 18px rgba(59, 130, 246, 0.28);
-        }
-
-        .error-panel {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 1rem;
-          margin-top: 1rem;
-          padding: 1rem 1.1rem;
-          border-radius: 22px;
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.97), rgba(255, 245, 247, 0.96));
-        }
-
-        .error-panel p {
-          margin: 0.35rem 0 0;
-          color: rgba(57, 82, 104, 0.82);
-        }
-
-        .error-panel button {
-          border: 0;
-          cursor: pointer;
-          padding: 0.85rem 1.1rem;
-          border-radius: 999px;
-          color: #fff;
-          background: linear-gradient(135deg, #06b6d4, #8b5cf6);
-          font-weight: 700;
-        }
-
-        .detail-panel {
-          display: grid;
-          gap: 1rem;
-          margin-top: 1rem;
-        }
-
-        .panel {
-          border-radius: 26px;
-          padding: 1.1rem;
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(246, 250, 255, 0.95));
-        }
-
-        .panel h2,
-        .panel h3,
-        .panel strong,
-        .detail-heading h2 {
-          color: #0c2941;
-        }
-
-        .panel-stack {
-          display: grid;
-          gap: 1rem;
-        }
-
-        .panel-heading {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 1rem;
-          margin-bottom: 1rem;
-        }
-
-        .panel-heading.compact {
-          margin-bottom: 0.85rem;
-        }
-
-        .panel-heading h2 {
-          margin: 0.25rem 0 0;
-          font-size: 1.35rem;
-          letter-spacing: -0.03em;
-        }
-
-        .panel-kicker {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.45rem;
-          font-size: 0.76rem;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
-          color: #06b6d4;
-        }
-
-        .panel-count {
-          white-space: nowrap;
-          padding: 0.5rem 0.85rem;
-          border-radius: 999px;
-          font-size: 0.86rem;
-          background: rgba(255, 255, 255, 0.88);
-          border: 1px solid rgba(148, 163, 184, 0.16);
-        }
-
-        .record-list {
-          display: grid;
-          gap: 0.9rem;
-        }
-
-        .record-card {
-          padding: 1rem;
-          border-radius: 22px;
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(249, 252, 255, 0.95));
-          border: 1px solid rgba(148, 163, 184, 0.14);
-        }
-
-        .record-card-head {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 1rem;
-        }
-
-        .record-card h3 {
-          margin: 0.3rem 0 0.35rem;
-          font-size: 1.1rem;
-          letter-spacing: -0.03em;
-        }
-
-        .record-card p {
-          margin: 0;
-          color: rgba(57, 82, 104, 0.75);
-        }
-
-        .record-id {
-          display: inline-flex;
-          align-items: center;
-          padding: 0.3rem 0.65rem;
-          border-radius: 999px;
-          background: rgba(59, 130, 246, 0.12);
-          border: 1px solid rgba(59, 130, 246, 0.2);
-          font-size: 0.8rem;
-          letter-spacing: 0.08em;
-          color: #2563eb;
-        }
-
-        .record-badges {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 0.5rem;
-          justify-content: flex-end;
-        }
-
-        .status-chip,
-        .mini-pill {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 999px;
-          padding: 0.4rem 0.72rem;
-          font-size: 0.76rem;
-          font-weight: 700;
-          letter-spacing: 0.05em;
-          text-transform: uppercase;
-        }
-
-        .status-chip {
-          border: 1px solid rgba(148, 163, 184, 0.14);
-          background: rgba(255, 255, 255, 0.88);
-        }
-
-        .status-chip-success {
-          color: #15803d;
-        }
-
-        .status-chip-warn {
-          color: #b45309;
-        }
-
-        .status-chip-muted {
-          color: #475569;
-        }
-
-        .record-meta-grid,
-        .snapshot-grid {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 0.8rem;
-          margin-top: 1rem;
-        }
-
-        .record-meta-grid div,
-        .snapshot-grid div {
-          padding: 0.85rem 0.9rem;
-          border-radius: 16px;
-          background: rgba(255, 255, 255, 0.9);
-          border: 1px solid rgba(148, 163, 184, 0.12);
-        }
-
-        .record-meta-grid span,
-        .snapshot-grid span {
-          display: block;
-          margin-bottom: 0.35rem;
-          font-size: 0.74rem;
-          letter-spacing: 0.1em;
-          text-transform: uppercase;
-        }
-
-        .record-meta-grid strong,
-        .snapshot-grid strong {
-          display: block;
-          line-height: 1.45;
-          word-break: break-word;
-        }
-
-        .mini-list {
-          display: grid;
-          gap: 0.75rem;
-        }
-
-        .mini-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 1rem;
-          padding: 0.85rem 0.95rem;
-          border-radius: 18px;
-          background: rgba(255, 255, 255, 0.9);
-          border: 1px solid rgba(148, 163, 184, 0.12);
-        }
-
-        .mini-row div {
+        .filter-row label {
           display: grid;
           gap: 0.3rem;
         }
 
-        .mini-row strong {
-          font-size: 0.98rem;
+        .filter-row span {
+          font-size: 0.74rem;
+          font-weight: 600;
+          color: var(--ink-muted);
         }
 
-        .mini-row span {
-          font-size: 0.86rem;
-          line-height: 1.45;
+        .filter-row input {
+          border: 1px solid var(--border);
+          border-radius: 7px;
+          padding: 0.5rem 0.6rem;
+          font-size: 0.84rem;
+          background: var(--surface);
+          color: var(--ink);
         }
 
-        .mini-pill {
-          color: #ffffff;
-          background: linear-gradient(135deg, #22c55e, #0ea5e9);
-          flex-shrink: 0;
-        }
-
-        .mini-pill.warning {
-          background: linear-gradient(135deg, #f59e0b, #fb7185);
+        .clear-filters {
+          border: 1px solid var(--border);
+          background: var(--surface-muted);
+          border-radius: 7px;
+          padding: 0.55rem 0.8rem;
+          font-size: 0.82rem;
+          font-weight: 600;
+          cursor: pointer;
+          color: var(--ink);
         }
 
         .table-wrap {
           overflow-x: auto;
-          border-radius: 22px;
-          border: 1px solid rgba(148, 163, 184, 0.14);
-          background: rgba(255, 255, 255, 0.92);
+          border: 1px solid var(--border);
+          border-radius: 10px;
         }
 
-        .data-table {
+        table {
           width: 100%;
           border-collapse: collapse;
           min-width: 760px;
         }
 
-        .data-table th,
-        .data-table td {
-          padding: 1rem 1rem;
-          border-bottom: 1px solid rgba(226, 232, 240, 1);
+        th, td {
+          padding: 0.75rem 0.9rem;
           text-align: left;
-          vertical-align: top;
-          color: #17324a;
+          border-bottom: 1px solid var(--border);
+          font-size: 0.86rem;
         }
 
-        .data-table th {
-          background: linear-gradient(135deg, rgba(236, 254, 255, 1), rgba(240, 249, 255, 1));
-          font-size: 0.8rem;
+        th {
+          background: var(--surface-muted);
+          font-size: 0.74rem;
           text-transform: uppercase;
-          letter-spacing: 0.12em;
-          color: #0f766e;
-        }
-
-        .data-table tr:hover td {
-          background: rgba(245, 250, 255, 0.92);
-        }
-
-        .table-pill {
-          display: inline-flex;
-          align-items: center;
-          padding: 0.35rem 0.7rem;
-          border-radius: 999px;
-          font-size: 0.78rem;
+          letter-spacing: 0.06em;
+          color: var(--ink-muted);
           font-weight: 700;
         }
 
-        .table-pill-success {
-          color: #166534;
-          background: rgba(220, 252, 231, 1);
+        tbody tr:hover td {
+          background: var(--surface-muted);
         }
 
-        .plan-modal-shell {
+        .type-badge {
+          display: inline-flex;
+          align-items: center;
+          padding: 0.25rem 0.6rem;
+          border-radius: 999px;
+          font-size: 0.76rem;
+          font-weight: 600;
+        }
+
+        .type-otp {
+          background: var(--accent-soft);
+          color: var(--accent);
+        }
+
+        .type-registered {
+          background: #fff4e0;
+          color: #a5620a;
+        }
+
+        .type-plan {
+          background: var(--success-soft);
+          color: var(--success);
+        }
+
+        .cell-muted {
+          color: var(--ink-muted);
+        }
+
+        .view-plan-btn {
+          border: 1px solid var(--accent);
+          background: var(--surface);
+          color: var(--accent);
+          border-radius: 7px;
+          padding: 0.4rem 0.7rem;
+          font-size: 0.78rem;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .view-plan-btn:hover {
+          background: var(--accent);
+          color: #fff;
+        }
+
+        .empty-state {
+          padding: 2rem 1rem;
+          text-align: center;
+          color: var(--ink-muted);
+          border: 1px dashed var(--border);
+          border-radius: 10px;
+          font-size: 0.88rem;
+        }
+
+        .plan-modal {
           width: 100%;
           height: 100%;
-          max-height: 92vh;
+          background: var(--surface);
+          border-radius: 16px;
+          border: 1px solid var(--border);
           overflow: hidden;
-          border-radius: 28px;
-          border: 1px solid rgba(148, 163, 184, 0.18);
-          background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(245, 251, 255, 0.98));
-          box-shadow: 0 30px 80px rgba(15, 23, 42, 0.25);
+          display: flex;
+          flex-direction: column;
         }
 
         .plan-modal-header {
-          padding: 0.4rem 1.2rem 0;
-          border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+          padding: 1rem 1.3rem;
+          border-bottom: 1px solid var(--border);
         }
 
         .plan-modal-body {
-          height: calc(92vh - 92px);
-          max-height: calc(92vh - 92px);
+          padding: 1.1rem 1.3rem 1.5rem;
           overflow-y: auto;
-          padding: 1.1rem 1.2rem 1.2rem;
         }
 
-        .plan-hero-grid {
+        .plan-summary-grid {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 1rem;
+          gap: 0.9rem;
         }
 
-        .plan-hero-card {
-          padding: 1.15rem;
-          border-radius: 24px;
-          color: #fff;
-          min-height: 170px;
-          display: grid;
-          align-content: space-between;
+        .plan-summary-card {
+          border: 1px solid var(--border);
+          border-radius: 12px;
+          padding: 1rem;
+          background: var(--surface-muted);
         }
 
-        .plan-hero-card span {
+        .plan-summary-card span {
           font-size: 0.74rem;
-          letter-spacing: 0.12em;
           text-transform: uppercase;
-          opacity: 0.88;
+          letter-spacing: 0.06em;
+          color: var(--ink-muted);
+          font-weight: 700;
         }
 
-        .plan-hero-card strong {
-          font-size: 1.25rem;
-          line-height: 1.2;
+        .plan-summary-card strong {
+          display: block;
+          margin: 0.4rem 0 0.3rem;
+          font-size: 1.05rem;
         }
 
-        .plan-hero-card p {
+        .plan-summary-card p {
           margin: 0;
-          opacity: 0.92;
+          color: var(--ink-muted);
+          font-size: 0.84rem;
           line-height: 1.5;
-        }
-
-        .accent-a {
-          background: linear-gradient(135deg, #0ea5e9, #2563eb);
-        }
-
-        .accent-b {
-          background: linear-gradient(135deg, #8b5cf6, #ec4899);
-        }
-
-        .accent-c {
-          background: linear-gradient(135deg, #22c55e, #14b8a6);
         }
 
         .plan-detail-grid {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 1rem;
+          gap: 0.9rem;
           margin-top: 1rem;
         }
 
         .plan-section {
           margin-top: 1rem;
-          padding: 1.1rem;
-          border-radius: 24px;
-          background: rgba(255, 255, 255, 0.92);
-          border: 1px solid rgba(148, 163, 184, 0.14);
-        }
-
-        .plan-section-head {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 1rem;
-          margin-bottom: 0.8rem;
+          border: 1px solid var(--border);
+          border-radius: 12px;
+          padding: 1rem;
         }
 
         .plan-section h3 {
-          margin: 0;
-          font-size: 1rem;
-          color: #0c2941;
+          margin: 0 0 0.8rem;
+          font-size: 0.95rem;
         }
 
         .plan-detail-list {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 0.9rem;
+          gap: 0.7rem;
         }
 
         .plan-detail-list.two-col {
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
-        .plan-detail-list div,
-        .plan-card-list,
-        .payment-card {
-          padding: 1rem;
-          border-radius: 18px;
-          background: linear-gradient(135deg, rgba(248, 250, 252, 0.96), rgba(255, 255, 255, 1));
-          border: 1px solid rgba(148, 163, 184, 0.12);
+        .plan-detail-list div {
+          border: 1px solid var(--border);
+          border-radius: 9px;
+          padding: 0.7rem 0.8rem;
+          background: var(--surface-muted);
         }
 
-        .plan-detail-list span,
-        .payment-meta-grid span,
-        .plan-small-card span {
+        .plan-detail-list span {
           display: block;
-          margin-bottom: 0.35rem;
-          font-size: 0.74rem;
-          letter-spacing: 0.1em;
+          font-size: 0.72rem;
           text-transform: uppercase;
-          color: rgba(57, 82, 104, 0.76);
+          letter-spacing: 0.05em;
+          color: var(--ink-muted);
+          margin-bottom: 0.25rem;
+          font-weight: 700;
         }
 
-        .plan-detail-list strong,
-        .payment-meta-grid strong,
-        .plan-small-card strong {
-          color: #0c2941;
+        .plan-detail-list strong {
           word-break: break-word;
+          font-size: 0.9rem;
         }
 
-        .plan-empty-inline,
-        .plan-empty-state {
-          padding: 1.1rem;
-          border-radius: 20px;
-          background: rgba(255, 255, 255, 0.92);
-          border: 1px dashed rgba(148, 163, 184, 0.22);
-          color: #0f2f46;
+        .plan-placeholder,
+        .plan-placeholder-inline {
+          border: 1px dashed var(--border);
+          border-radius: 10px;
+          padding: 1rem;
+          color: var(--ink-muted);
+          font-size: 0.88rem;
         }
 
-        .plan-empty-state.error {
-          background: rgba(255, 247, 237, 0.96);
+        .plan-error {
+          border-color: rgba(179, 38, 30, 0.3);
+          background: var(--danger-soft);
+          color: var(--danger);
         }
 
-        .plan-card-list,
+        .plan-list,
         .payment-list {
           display: grid;
-          gap: 0.9rem;
+          gap: 0.7rem;
         }
 
-        .plan-small-card {
-          padding: 1rem;
-          border-radius: 18px;
-          background: rgba(255, 255, 255, 0.96);
-          border: 1px solid rgba(148, 163, 184, 0.12);
+        .plan-list-item,
+        .payment-item {
+          border: 1px solid var(--border);
+          border-radius: 10px;
+          padding: 0.85rem;
+          background: var(--surface-muted);
         }
 
-        .plan-small-card p {
-          margin: 0.45rem 0 0;
-          color: rgba(57, 82, 104, 0.76);
+        .plan-list-item p {
+          margin: 0.35rem 0 0;
+          color: var(--ink-muted);
+          font-size: 0.84rem;
         }
 
-        .payment-card {
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(240, 249, 255, 0.95));
-        }
-
-        .payment-row {
+        .payment-item-top {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 1rem;
-          margin-bottom: 1rem;
-        }
-
-        .payment-row strong {
-          font-size: 1.1rem;
-          color: #0c2941;
+          margin-bottom: 0.7rem;
         }
 
         .payment-status {
-          display: inline-flex;
-          align-items: center;
-          padding: 0.35rem 0.7rem;
+          padding: 0.25rem 0.6rem;
           border-radius: 999px;
-          font-size: 0.76rem;
+          font-size: 0.74rem;
           font-weight: 700;
-          text-transform: uppercase;
+          background: var(--success-soft);
+          color: var(--success);
         }
 
-        .payment-status.success {
-          background: rgba(220, 252, 231, 1);
-          color: #166534;
-        }
-
-        .payment-meta-grid {
+        .payment-meta {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 0.9rem;
+          gap: 0.6rem;
         }
 
-        .payment-meta-grid div {
-          padding: 0.9rem;
-          border-radius: 16px;
-          background: rgba(255, 255, 255, 0.9);
-          border: 1px solid rgba(148, 163, 184, 0.1);
+        .payment-meta div {
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          padding: 0.6rem 0.7rem;
+          background: var(--surface);
         }
 
-        .payment-meta-grid div:last-child {
+        .payment-meta div:last-child {
           grid-column: 1 / -1;
         }
 
-        .view-plan-button {
-          border: 0;
-          cursor: pointer;
-          padding: 0.7rem 0.95rem;
-          border-radius: 999px;
-          color: #fff;
-          background: linear-gradient(135deg, #2563eb, #7c3aed);
+        .payment-meta span {
+          display: block;
+          font-size: 0.72rem;
+          text-transform: uppercase;
+          color: var(--ink-muted);
+          margin-bottom: 0.25rem;
           font-weight: 700;
-          box-shadow: 0 12px 24px rgba(59, 130, 246, 0.18);
         }
 
-        @media (max-width: 900px) {
-          .plan-hero-grid,
-          .plan-detail-grid,
+        @media (max-width: 1080px) {
+          .kpi-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .bucket-grid {
+            grid-template-columns: 1fr;
+          }
+          .plan-summary-grid,
+          .plan-detail-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .kpi-grid {
+            grid-template-columns: 1fr;
+          }
+          .dash-header {
+            flex-direction: column;
+          }
           .plan-detail-list {
             grid-template-columns: 1fr;
           }
-
-          .payment-meta-grid,
-          .plan-detail-list.two-col {
-            grid-template-columns: 1fr;
-          }
-
-          .plan-modal-body {
-            height: auto;
-            max-height: calc(92vh - 92px);
-          }
-        }
-
-        .table-pill-warning {
-          color: #92400e;
-          background: rgba(254, 243, 199, 1);
-        }
-
-        .table-empty {
-          margin-top: 0;
-        }
-
-        .detail-heading {
-          margin-bottom: 0;
-        }
-
-        .detail-heading p {
-          margin: 0.3rem 0 0;
-        }
-
-        .inline-link {
-          margin-top: 0.45rem;
-          padding: 0;
-          border: 0;
-          background: transparent;
-          color: #2563eb;
-          font-weight: 700;
-          cursor: pointer;
-        }
-
-        .summary-card-active {
-          border-color: rgba(59, 130, 246, 0.34);
-          box-shadow: 0 18px 45px rgba(37, 99, 235, 0.14);
-          transform: translateY(-3px);
-        }
-
-        .accent-panel {
-          background: linear-gradient(135deg, rgba(224, 242, 254, 0.96), rgba(240, 253, 244, 0.96));
-        }
-
-        .accent-panel.alt {
-          background: linear-gradient(135deg, rgba(255, 247, 237, 0.96), rgba(255, 241, 242, 0.96));
-        }
-
-        .accent-panel h3 {
-          margin: 0.5rem 0;
-          font-size: 1.1rem;
-        }
-
-        .accent-panel strong {
-          display: block;
-          margin: 0.35rem 0 0.4rem;
-          font-size: 2rem;
-        }
-
-        .bottom-grid {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 1rem;
-          margin-top: 1rem;
-        }
-
-        .snapshot-grid {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          margin-top: 0;
-        }
-
-        .empty-state {
-          display: grid;
-          gap: 0.45rem;
-          padding: 1.1rem;
-          border-radius: 20px;
-          background: rgba(255, 255, 255, 0.92);
-          border: 1px dashed rgba(148, 163, 184, 0.22);
-        }
-
-        .empty-state.compact {
-          min-height: 118px;
-          align-content: center;
-        }
-
-        .empty-state strong {
-          font-size: 1rem;
-        }
-
-        .empty-state p {
-          margin: 0;
-          line-height: 1.6;
-        }
-
-        @keyframes pulse {
-          0% {
-            box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.5);
-          }
-          70% {
-            box-shadow: 0 0 0 10px rgba(52, 211, 153, 0);
-          }
-          100% {
-            box-shadow: 0 0 0 0 rgba(52, 211, 153, 0);
-          }
-        }
-
-        @media (max-width: 1180px) {
-          .hero-card,
-          .bottom-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .summary-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .record-meta-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
-        }
-
-        @media (max-width: 760px) {
-          .dashboard-frame {
-            width: min(100%, calc(100% - 1rem));
-            padding-top: 0.75rem;
-          }
-
-          .hero-card,
-          .panel,
-          .summary-card,
-          .error-panel {
-            border-radius: 22px;
-          }
-
-          .hero-metric-row,
-          .record-meta-grid,
-          .snapshot-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .hero-metric-row {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
-
-          .record-card-head,
-          .mini-row,
-          .panel-heading,
-          .error-panel,
-          .detail-heading {
-            flex-direction: column;
-            align-items: flex-start;
-          }
-
-          .record-badges {
-            justify-content: flex-start;
-          }
-
-          .hero-copy h1 {
-            max-width: 100%;
-          }
-        }
-
-        @media (max-width: 520px) {
-          .hero-metric-row {
-            grid-template-columns: 1fr;
-          }
-
-          .hero-pill-row {
-            align-items: flex-start;
-          }
-
-          .bottom-grid {
+          .payment-meta {
             grid-template-columns: 1fr;
           }
         }
