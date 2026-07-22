@@ -13,12 +13,37 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { apiCall } from "../../../../utils/api";
 import URL from "../../../../utils/url";
 import Cookies from "js-cookie";
 import { useRouter } from "next/navigation";
+import { Check, X } from "lucide-react";
+
+// Custom Switch with Check/Cross icon inside the thumb
+const IconSwitch = ({ checked, onCheckedChange, disabled = false }) => {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => onCheckedChange(!checked)}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 shrink-0
+        ${checked ? "bg-green-500" : "bg-gray-300"}
+        ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+    >
+      <span
+        className={`inline-flex h-5 w-5 items-center justify-center rounded-full bg-white shadow transform transition-transform duration-200
+          ${checked ? "translate-x-5" : "translate-x-0.5"}`}
+      >
+        {checked ? (
+          <Check className="h-3 w-3 text-green-500" strokeWidth={3} />
+        ) : (
+          <X className="h-3 w-3 text-gray-400" strokeWidth={3} />
+        )}
+      </span>
+    </button>
+  );
+};
 
 const Plans = () => {
   const [open, setOpen] = useState(false);
@@ -81,7 +106,6 @@ const Plans = () => {
     setEditMode(true);
     setEditingPlan(plan);
 
-    // Populate form with existing plan data
     setForm({
       name: plan.name || "",
       description: plan.description || "",
@@ -138,7 +162,6 @@ const Plans = () => {
     setLoading(true);
 
     try {
-      // Transform form data to match API format
       const requestBody = {
         name: form.name,
         description: form.description,
@@ -149,7 +172,6 @@ const Plans = () => {
           invoices: form.unlimitedInvoices ? 0 : parseInt(form.invoices),
           unlimited: form.unlimitedInvoices,
         },
-
         features: form.features
           .filter((f) => f.name.trim() !== "")
           .map((f) => ({
@@ -175,25 +197,21 @@ const Plans = () => {
       console.log("API Response:", res);
 
       if (res.success) {
-        // Show success toast
         const successMessage = editMode
           ? res.message || "Plan updated successfully!"
           : res.message || "Plan created successfully!";
         toast.success(successMessage);
 
         if (editMode) {
-          // Update the existing plan in the local state
           setPlans(
             plans.map((plan) =>
               plan._id === editingPlan._id ? res.data : plan
             )
           );
         } else {
-          // Add the new plan to the local state
           setPlans([...plans, res.data]);
         }
 
-        // Reset form and close dialog
         resetForm();
         setOpen(false);
       } else if (res == "Unauthorized") {
@@ -201,7 +219,6 @@ const Plans = () => {
         toast.success("Session expired. Please log in again.");
         router.push("/login");
       } else {
-        // Show error toast with detailed information
         let errorMessage;
         if (res.status === 401) {
           errorMessage =
@@ -216,7 +233,6 @@ const Plans = () => {
         }
         toast.error(errorMessage);
 
-        // Log detailed error for debugging
         console.error("API Error:", {
           status: res.status,
           message: res.message,
@@ -378,7 +394,7 @@ const Plans = () => {
               />
             </div>
 
-            {/* Invoices Section - FIXED */}
+            {/* Invoices Section */}
             <div className="border-t pt-4 space-y-3">
               <div className="flex flex-col md:flex-row md:items-center gap-2">
                 <Label htmlFor="invoices" className="md:w-40">
@@ -399,8 +415,7 @@ const Plans = () => {
                 <Label htmlFor="unlimitedInvoices" className="cursor-pointer">
                   Unlimited Invoices
                 </Label>
-                <Switch
-                  id="unlimitedInvoices"
+                <IconSwitch
                   checked={form.unlimitedInvoices}
                   onCheckedChange={(val) => {
                     setForm({
@@ -442,7 +457,7 @@ const Plans = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs">Available</span>
-                      <Switch
+                      <IconSwitch
                         checked={f.available}
                         onCheckedChange={(val) =>
                           handleFeatureChange(index, "available", val)
@@ -467,8 +482,7 @@ const Plans = () => {
               <Label htmlFor="isActive" className="cursor-pointer">
                 Active
               </Label>
-              <Switch
-                id="isActive"
+              <IconSwitch
                 checked={form.isActive}
                 onCheckedChange={(val) => setForm({ ...form, isActive: val })}
               />
@@ -501,4 +515,5 @@ const Plans = () => {
     </div>
   );
 };
+
 export default Plans;
