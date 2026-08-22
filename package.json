@@ -27,17 +27,17 @@
     "file-saver": "^2.0.5",
     "input-otp": "^1.4.2",
     "js-cookie": "^3.0.5",
-    "jspdf": "^3.0.3",
+    "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.2",
     "lucide-react": "^0.544.0",
-    "next": "15.5.3",
+    "next": "^16.3.2",
     "next-themes": "^0.4.6",
-    "react": "19.1.0",
+    "react": "^19.2.8",
     "react-day-picker": "^9.10.0",
-    "react-dom": "19.1.0",
+    "react-dom": "^19.2.8",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-latest/xlsx-latest.tgz"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

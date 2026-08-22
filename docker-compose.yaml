@@ -1,12 +1,14 @@
 services:
   app:
-    build: .
+    image: ghcr.io/amptechnology-dev/temp-amdaani-admin-fronted:latest
     container_name: nextjs-app
     restart: unless-stopped
     env_file:
       - .env
     expose:
       - "4010"
+    mem_limit: 512m
+    cpus: 1.0
     networks:
       - app-network
 
