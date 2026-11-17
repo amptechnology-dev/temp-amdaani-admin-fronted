@@ -77,9 +77,8 @@ export function LoginForm({ className, ...props }) {
       console.log("OTP verified successfully:", response);
 
       if (response.success && response.data?.token) {
-        // Save token to cookies (expires in 7 days)
         Cookies.set("token", response.data.token, {
-          expires: 7,
+          expires: 1,
           sameSite: "strict",
         });
 
@@ -105,10 +104,10 @@ export function LoginForm({ className, ...props }) {
 
     try {
       const response = await apiCall({
-        endpoint: "/auth/get-otp",
+        endpoint: URL.getOtp,
         method: "POST",
         body: {
-          mobile: phone,
+          phone: phone,
         },
       });
 
