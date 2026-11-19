@@ -3,7 +3,7 @@ name: Deploy Amdaani Admin
 on:
   push:
     branches:
-      - master
+      - main
 
 env:
   REGISTRY: ghcr.io
@@ -61,7 +61,7 @@ jobs:
           command_timeout: 10m
           script: |
             cd ~/temp-amdaani-admin-fronted
-            git pull origin master
+            git pull origin main
             docker compose pull
             docker compose up -d
             docker image prune -f

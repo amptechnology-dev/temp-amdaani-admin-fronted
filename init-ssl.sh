@@ -6,7 +6,7 @@ EMAIL="devs.amptechnology@gmail.com"
 APP_CONTAINER="nextjs-app"
 APP_PORT="4010"
 
-# ✅ Use backend project's nginx and certbot
+# Use backend project's nginx and certbot
 BACKEND_PROJECT_DIR="/root/amp_portal_backend"
 NGINX_CONF_DIR="$BACKEND_PROJECT_DIR/nginx/conf.d"
 CERTBOT_WWW_DIR="$BACKEND_PROJECT_DIR/certbot/www"
@@ -16,7 +16,7 @@ CERT_PATH="$CERTBOT_CONF_DIR/live/$DOMAIN/fullchain.pem"
 
 echo "=== Starting SSL setup for $DOMAIN ==="
 
-# ✅ Check backend nginx is running
+# Check backend nginx is running
 if ! docker ps --format '{{.Names}}' | grep -q '^nginx$'; then
   echo "ERROR: nginx container is not running."
   echo "Start backend first: cd $BACKEND_PROJECT_DIR && ./init-ssl.sh"
@@ -27,7 +27,7 @@ mkdir -p "$NGINX_CONF_DIR"
 mkdir -p "$CERTBOT_WWW_DIR/.well-known/acme-challenge"
 mkdir -p "$CERTBOT_CONF_DIR"
 
-# ─── Write HTTPS nginx config ──────────────────────────────
+# --- Write HTTPS nginx config ---
 write_https_config() {
 cat > "$CONF_FILE" << NGINXEOF
 server {
@@ -65,19 +65,20 @@ server {
 NGINXEOF
 }
 
-# ─── CASE 1: Cert exists → redeploy ───────────────────────
+# --- CASE 1: Cert exists -> redeploy ---
 if [ -f "$CERT_PATH" ]; then
-  echo "Certificate already exists — redeploying..."
+  echo "Certificate already exists - redeploying..."
   write_https_config
-  docker compose up -d --build --remove-orphans
+  docker compose pull
+  docker compose up -d --remove-orphans
   sleep 5
   docker exec nginx nginx -s reload
   echo "=== Redeploy complete! https://$DOMAIN ==="
   exit 0
 fi
 
-# ─── CASE 2: First time → get cert ────────────────────────
-echo "No certificate found — first-time setup..."
+# --- CASE 2: First time -> get cert ---
+echo "No certificate found - first-time setup..."
 
 # Write temp HTTP config for ACME challenge
 cat > "$CONF_FILE" << NGINXEOF
@@ -104,7 +105,7 @@ sleep 3
 echo "Verifying $DOMAIN responds on port 80..."
 curl -sf -H "Host: $DOMAIN" http://localhost:80 > /dev/null \
   && echo "Domain OK" \
-  || { echo "ERROR: $DOMAIN not responding — check DNS"; exit 1; }
+  || { echo "ERROR: $DOMAIN not responding - check DNS"; exit 1; }
 
 # Request certificate
 echo "Requesting certificate..."
@@ -132,7 +133,8 @@ write_https_config
 
 # Start frontend container
 echo "Starting frontend container..."
-docker compose up -d --build --remove-orphans
+docker compose pull
+docker compose up -d --remove-orphans
 sleep 5
 
 # Reload nginx with HTTPS config
