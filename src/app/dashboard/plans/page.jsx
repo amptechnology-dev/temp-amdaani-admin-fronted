@@ -45,6 +45,23 @@ const IconSwitch = ({ checked, onCheckedChange, disabled = false }) => {
   );
 };
 
+// Plan-er feature gating options
+const FEATURE_OPTIONS = [
+  { key: "manageStaff", label: "Manage Staff" },
+  { key: "stockManagement", label: "Stock Management" },
+  { key: "orders", label: "Orders" },
+  { key: "reports", label: "Reports" },
+  { key: "purchaseManagement", label: "Purchase Management (Vendors)" },
+];
+
+const defaultEnabledFeatures = {
+  manageStaff: false,
+  stockManagement: false,
+  orders: false,
+  reports: false,
+  purchaseManagement: false,
+};
+
 const Plans = () => {
   const [open, setOpen] = useState(false);
   const [plans, setPlans] = useState([]);
@@ -80,6 +97,7 @@ const Plans = () => {
     durationDays: 30,
     invoices: "",
     unlimitedInvoices: false,
+    enabledFeatures: { ...defaultEnabledFeatures },
     features: [{ name: "", available: true, note: "" }],
     isActive: true,
   });
@@ -114,6 +132,10 @@ const Plans = () => {
       durationDays: plan.durationDays || 30,
       invoices: plan.usageLimits.invoices,
       unlimitedInvoices: plan.usageLimits.unlimited,
+      enabledFeatures: {
+        ...defaultEnabledFeatures,
+        ...(plan.enabledFeatures || {}),
+      },
       features:
         plan.features?.length > 0
           ? plan.features.map((f) => ({
@@ -126,10 +148,6 @@ const Plans = () => {
     });
 
     setOpen(true);
-    setTimeout(() => {
-      console.log("Editing Plan:", plan);
-      console.log("Populated Form:", form);
-    }, 3000);
   };
 
   const resetForm = () => {
@@ -141,6 +159,7 @@ const Plans = () => {
       durationDays: 30,
       invoices: "",
       unlimitedInvoices: false,
+      enabledFeatures: { ...defaultEnabledFeatures },
       features: [{ name: "", available: true, note: "" }],
       isActive: true,
     });
@@ -172,6 +191,7 @@ const Plans = () => {
           invoices: form.unlimitedInvoices ? 0 : parseInt(form.invoices),
           unlimited: form.unlimitedInvoices,
         },
+        enabledFeatures: form.enabledFeatures,
         features: form.features
           .filter((f) => f.name.trim() !== "")
           .map((f) => ({
@@ -295,6 +315,21 @@ const Plans = () => {
                     ? "Unlimited"
                     : `${plan.usageLimits?.invoices}/month`}
                 </p>
+
+                {/* Plan access summary */}
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {FEATURE_OPTIONS.filter(
+                    (opt) => plan.enabledFeatures?.[opt.key]
+                  ).map((opt) => (
+                    <span
+                      key={opt.key}
+                      className="text-[11px] px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200"
+                    >
+                      {opt.label}
+                    </span>
+                  ))}
+                </div>
+
                 <ul className="text-sm list-disc pl-5 mt-2">
                   {plan.features?.map((f, i) => (
                     <li
@@ -425,6 +460,36 @@ const Plans = () => {
                     });
                   }}
                 />
+              </div>
+            </div>
+
+            {/* Plan Access (feature gating) */}
+            <div className="border-t pt-4">
+              <Label className="mb-3 block">Plan Access</Label>
+              <p className="text-xs text-muted-foreground mb-3">
+                Free plan-e shob off rakho. Shudhu invoice korte parbe.
+              </p>
+              <div className="space-y-2">
+                {FEATURE_OPTIONS.map((opt) => (
+                  <div
+                    key={opt.key}
+                    className="flex items-center justify-between bg-gray-50 p-3 rounded-md"
+                  >
+                    <span className="text-sm">{opt.label}</span>
+                    <IconSwitch
+                      checked={!!form.enabledFeatures[opt.key]}
+                      onCheckedChange={(val) =>
+                        setForm({
+                          ...form,
+                          enabledFeatures: {
+                            ...form.enabledFeatures,
+                            [opt.key]: val,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                ))}
               </div>
             </div>
 
